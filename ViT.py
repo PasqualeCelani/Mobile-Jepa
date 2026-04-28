@@ -1,7 +1,8 @@
 import torch.nn as nn
 import torch
-import np
-
+import numpy as np  
+import math
+from torch.nn.init import trunc_normal_
 
 
 class PatchEmbedding(nn.Module):
@@ -55,8 +56,7 @@ class ViT(nn.Module):
         num_patches = (img_size // patch_size) ** 2
         
         grid_size = int(num_patches**0.5)
-        
-        
+    
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim), requires_grad=False)
         pos_embed = self.__get_2d_sincos_pos_embed(embed_dim, grid_size)
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
@@ -68,6 +68,33 @@ class ViT(nn.Module):
         ])
         
         self.norm = nn.LayerNorm(embed_dim)
+
+        self.init_std = 0.02
+        self.apply(self._init_weights)
+        self.fix_init_weight()
+    
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=self.init_std)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+        elif isinstance(m, nn.Conv2d):
+            trunc_normal_(m.weight, std=self.init_std)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    #This helps more for deep networks, put for safety
+    def fix_init_weight(self):
+        def rescale(param, layer_id):
+            # Scale factor: 1 / sqrt(2 * layer_index)
+            param.div_(math.sqrt(2.0 * layer_id))
+
+        for layer_id, layer in enumerate(self.blocks):
+            rescale(layer.attn.out_proj.weight.data, layer_id + 1)
+            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
 
     def forward(self, x):
         x = self.patch_embed(x)
