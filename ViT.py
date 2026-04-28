@@ -45,7 +45,7 @@ class TransformerEncoder(nn.Module):
 
 
 class ViT(nn.Module):
-    def __init__(self, img_size=224, patch_size=16, embed_dim=768, num_heads=12, depth=3):
+    def __init__(self, img_size=224, patch_size=16, embed_dim=192, num_heads=3, depth=3):
         super().__init__()
 
         self.patch_embed = PatchEmbedding(img_size, patch_size, embed_dim=embed_dim)
