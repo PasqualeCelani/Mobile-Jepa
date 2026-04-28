@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 
 class PatchEmbedding(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
@@ -58,7 +59,7 @@ class ViT(nn.Module):
         self.pos_drop = nn.Dropout(p=0.1)
         
         self.blocks = nn.ModuleList([
-            TransformerBlock(embed_dim, num_heads) 
+            TransformerEncoder(embed_dim, num_heads) 
             for _ in range(depth)
         ])
         
@@ -81,6 +82,6 @@ class ViT(nn.Module):
         x = self.norm(x)
         return self.head(x[:, 0])
 
-def ViT-TinyS() : return ViT(depth=3)
-def ViT-TinyM() : return ViT(depth=6)
-def ViT-TinyL() : return ViT(depth=9)
+def ViT_TinyS() : return ViT(depth=3)
+def ViT_TinyM() : return ViT(depth=6)
+def ViT_TinyL() : return ViT(depth=9)
