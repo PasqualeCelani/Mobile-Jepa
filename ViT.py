@@ -1,5 +1,8 @@
 import torch.nn as nn
 import torch
+import np
+
+
 
 class PatchEmbedding(nn.Module):
     def __init__(self, patch_size=16, in_chans=3, embed_dim=768):
@@ -48,11 +51,15 @@ class ViT(nn.Module):
     def __init__(self, img_size=224, patch_size=16, embed_dim=192, num_heads=3, depth=3):
         super().__init__()
 
-        self.patch_embed = PatchEmbedding(img_size, patch_size, embed_dim=embed_dim)
+        self.patch_embed = PatchEmbedding(patch_size=patch_size, in_chans=3, embed_dim=embed_dim)
         num_patches = (img_size // patch_size) ** 2
         
-        # Learnable position embeddings: [1, num_patches, embed_dim]
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim))
+        grid_size = int(num_patches**0.5)
+        
+        
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim), requires_grad=False)
+        pos_embed = self.__get_2d_sincos_pos_embed(embed_dim, grid_size)
+        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
         self.pos_drop = nn.Dropout(p=0.1)
         
         self.blocks = nn.ModuleList([
@@ -70,7 +77,44 @@ class ViT(nn.Module):
             x = block(x)
         
         return self.norm(x)
+    
+    def __get_2d_sincos_pos_embed(self, embed_dim, grid_size):
+        grid_h = np.arange(grid_size, dtype=float)
+        grid_w = np.arange(grid_size, dtype=float)
+        grid = np.meshgrid(grid_w, grid_h) 
+        grid = np.stack(grid, axis=0)
 
-def ViT_TinyS() : return ViT(depth=3)
-def ViT_TinyM() : return ViT(depth=6)
-def ViT_TinyL() : return ViT(depth=9)
+        grid = grid.reshape([2, 1, grid_size, grid_size])
+        pos_embed = self.__get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
+
+        return pos_embed
+
+    def __get_2d_sincos_pos_embed_from_grid(self, embed_dim, grid):
+        assert embed_dim % 2 == 0
+
+        emb_h = self.__get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
+        emb_w = self.__get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
+        emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
+
+        return emb
+
+    def __get_1d_sincos_pos_embed_from_grid(self, embed_dim, pos):
+        assert embed_dim % 2 == 0
+
+        omega = np.arange(embed_dim // 2, dtype=float)
+        omega /= embed_dim / 2.
+        omega = 1. / 10000**omega  
+
+        pos = pos.reshape(-1)  
+        out = np.einsum('m,d->md', pos, omega)  
+
+        emb_sin = np.sin(out)
+        emb_cos = np.cos(out)
+        emb = np.concatenate([emb_sin, emb_cos], axis=1)  
+        
+        return emb
+    
+    
+def ViT_TinyS() : return ViT(depth=6)
+def ViT_TinyM() : return ViT(depth=9)
+def ViT_TinyL() : return ViT(depth=12)
