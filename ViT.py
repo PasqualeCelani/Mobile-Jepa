@@ -232,8 +232,26 @@ class ViT(nn.Module):
         return emb
     
     
-def ViT_TinyS() : return ViT(depth=6)
-def ViT_TinyM() : return ViT(depth=9)
-def ViT_TinyL() : return ViT(depth=12)
+def ViT_TinyS(img_size, patch_size, embed_dim, num_heads, dropout) : 
+    return ViT(
+        img_size=img_size, patch_size=patch_size, embed_dim=embed_dim,num_heads=num_heads,
+        depth=6, dropout=dropout
+    )
 
-def ViT_Predictor(): return ViT(depth=12, is_predictor=True,  predictor_embed_dim=96)
+def ViT_TinyM(img_size, patch_size, embed_dim, num_heads, dropout) : 
+    return ViT(
+        img_size=img_size, patch_size=patch_size, embed_dim=embed_dim,num_heads=num_heads,
+        depth=9, dropout=dropout
+    )
+
+def ViT_TinyL(img_size, patch_size, embed_dim, num_heads, dropout) : 
+    return ViT(
+        img_size=img_size, patch_size=patch_size, embed_dim=embed_dim,num_heads=num_heads,
+        depth=12, dropout=dropout
+    )
+
+def ViT_Predictor(img_size, patch_size, embed_dim, num_heads, dropout, predictor_embed_dim): 
+    return ViT(
+        img_size=img_size, patch_size=patch_size, embed_dim=embed_dim,num_heads=num_heads,
+        depth=12, dropout=dropout, is_predictor=True, predictor_embed_dim=predictor_embed_dim
+    )
