@@ -49,29 +49,59 @@ class TransformerEncoder(nn.Module):
 
 
 class ViT(nn.Module):
-    def __init__(self, img_size=224, patch_size=16, embed_dim=192, num_heads=3, depth=3):
+    def __init__(
+            self, img_size=224, patch_size=16, embed_dim=192, num_heads=3, 
+            depth=3, is_predictor=False, predictor_embed_dim=None, 
+            predictor_depth=None, dropout=0.1
+        ):
         super().__init__()
 
+        self.is_predictor = is_predictor
+        self.predictor_embed_dim = predictor_embed_dim or embed_dim  
+        self.predictor_depth = predictor_depth or depth 
+
+        
         self.patch_embed = PatchEmbedding(patch_size=patch_size, in_chans=3, embed_dim=embed_dim)
         num_patches = (img_size // patch_size) ** 2
-        
         grid_size = int(num_patches**0.5)
-    
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim), requires_grad=False)
-        pos_embed = self.__get_2d_sincos_pos_embed(embed_dim, grid_size)
-        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
-        self.pos_drop = nn.Dropout(p=0.1)
+
+        if not is_predictor:
+            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim), requires_grad=False)
+            pos_embed = self.__get_2d_sincos_pos_embed(embed_dim, grid_size)
+            self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+            self.pos_drop = nn.Dropout(p=dropout)
+        else:
+            self.predictor_embed = nn.Linear(embed_dim, self.predictor_embed_dim, bias=True)
+            self.mask_token = nn.Parameter(torch.zeros(1, 1, self.predictor_embed_dim))
+            
+            self.predictor_pos_embed = nn.Parameter(
+                torch.zeros(1, num_patches, self.predictor_embed_dim), requires_grad=False
+            )
+
+            pred_pos_embed = self.__get_2d_sincos_pos_embed(self.predictor_embed_dim, grid_size)
+            self.predictor_pos_embed.data.copy_(torch.from_numpy(pred_pos_embed).float().unsqueeze(0))
+
+        block_dim = self.predictor_embed_dim if is_predictor else embed_dim
+        block_depth = self.predictor_depth if is_predictor else depth
         
         self.blocks = nn.ModuleList([
-            TransformerEncoder(embed_dim, num_heads) 
-            for _ in range(depth)
+            TransformerEncoder(block_dim, num_heads, dropout=dropout) 
+            for _ in range(block_depth)
         ])
-        
-        self.norm = nn.LayerNorm(embed_dim)
+
+
+        if not is_predictor:
+            self.norm = nn.LayerNorm(embed_dim)
+        else:
+            self.predictor_norm = nn.LayerNorm(self.predictor_embed_dim)
+            self.predictor_proj = nn.Linear(self.predictor_embed_dim, embed_dim, bias=True)
 
         self.init_std = 0.02
         self.apply(self._init_weights)
         self.fix_init_weight()
+        
+        if is_predictor:
+            trunc_normal_(self.mask_token, std=self.init_std)
     
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -96,14 +126,74 @@ class ViT(nn.Module):
             rescale(layer.attn.out_proj.weight.data, layer_id + 1)
             rescale(layer.mlp.fc2.weight.data, layer_id + 1)
 
-    def forward(self, x):
+    def forward(self, x, masks_x=None, masks=None):
+        if self.is_predictor:
+            return self._forward_predictor(x, masks_x, masks)
+        else:
+            return self._forward_encoder(x)
+    
+    def _forward_encoder(self, x):
         x = self.patch_embed(x)
         x = self.pos_drop(x + self.pos_embed)
         
         for block in self.blocks:
             x = block(x)
         
-        return self.norm(x)
+        return self.norm(x) 
+    
+    def _forward_predictor(self, x, masks_x, masks):
+        assert masks is not None and masks_x is not None, "Predictor mode requires masks_x and masks"
+        
+        if not isinstance(masks_x, list):
+            masks_x = [masks_x]
+        if not isinstance(masks, list):
+            masks = [masks]
+        
+        B = len(x) // len(masks_x)  
+        
+        x = self.patch_embed(x)  # [B_total, N, embed_dim]
+        x = self.predictor_embed(x)  # [B_total, N, predictor_embed_dim]
+        
+  
+        x_pos_embed = self.predictor_pos_embed.repeat(B, 1, 1)
+        x = x + self._apply_masks_simple(x_pos_embed, masks_x) 
+        
+        _, N_ctxt, D = x.shape
+        
+
+        pos_embs = self.predictor_pos_embed.repeat(B, 1, 1)
+        pos_embs = self._apply_masks(pos_embs, masks)
+        pos_embs = self._repeat_interleave_batch(pos_embs, B, repeat=len(masks_x))
+        
+        pred_tokens = self.mask_token.repeat(pos_embs.size(0), pos_embs.size(1), 1)
+        pred_tokens = pred_tokens + pos_embs
+        
+        x = x.repeat(len(masks), 1, 1) 
+        x = torch.cat([x, pred_tokens], dim=1)  # [B_total, N_ctxt + N_mask, D]
+        
+        for block in self.blocks: x = block(x)
+
+        x = self.predictor_norm(x)
+        
+        x = x[:, N_ctxt:] 
+        x = self.predictor_proj(x)  # [B_total, N_mask, embed_dim]
+        
+        return x
+    
+    def _apply_masks(self, x, masks):
+        all_x = []
+        for m in masks:
+            mask_keep = m.unsqueeze(-1).repeat(1, 1, x.size(-1))
+            all_x += [torch.gather(x, dim=1, index=mask_keep)]
+        return torch.cat(all_x, dim=0)
+    
+    def _repeat_interleave_batch(self, x, B, repeat):
+        N = len(x) // B
+        x = torch.cat([
+            torch.cat([x[i*B:(i+1)*B] for _ in range(repeat)], dim=0)
+            for i in range(N)
+        ], dim=0)
+        return x
     
     def __get_2d_sincos_pos_embed(self, embed_dim, grid_size):
         grid_h = np.arange(grid_size, dtype=float)
@@ -145,3 +235,5 @@ class ViT(nn.Module):
 def ViT_TinyS() : return ViT(depth=6)
 def ViT_TinyM() : return ViT(depth=9)
 def ViT_TinyL() : return ViT(depth=12)
+
+def ViT_Predictor(): return ViT(depth=12, is_predictor=True,  predictor_embed_dim=96)
