@@ -151,33 +151,37 @@ class ViT(nn.Module):
         
         B = len(x) // len(masks_x)  
         
-        x = self.patch_embed(x)  # [B_total, N, embed_dim]
-        x = self.predictor_embed(x)  # [B_total, N, predictor_embed_dim]
+        x = self._apply_masks(x, masks_x)  # [B, N_ctxt, embed_dim]
+
+        x = self.predictor_embed(x)  # [B, N_ctxt, predictor_embed_dim]
         
-  
         x_pos_embed = self.predictor_pos_embed.repeat(B, 1, 1)
-        x = x + self._apply_masks_simple(x_pos_embed, masks_x) 
-        
-        _, N_ctxt, D = x.shape
+        x_pos_embed = self._apply_masks(x_pos_embed, masks_x)
+        x = x + x_pos_embed 
         
 
-        pos_embs = self.predictor_pos_embed.repeat(B, 1, 1)
-        pos_embs = self._apply_masks(pos_embs, masks)
-        pos_embs = self._repeat_interleave_batch(pos_embs, B, repeat=len(masks_x))
+        target_pos_embed = self.predictor_pos_embed.repeat(B, 1, 1)
+        target_pos_embed = self._apply_masks(target_pos_embed, masks)
+        target_pos_embed = self._repeat_interleave_batch(target_pos_embed, B, repeat=len(masks_x))
         
-        pred_tokens = self.mask_token.repeat(pos_embs.size(0), pos_embs.size(1), 1)
-        pred_tokens = pred_tokens + pos_embs
-        
-        x = x.repeat(len(masks), 1, 1) 
-        x = torch.cat([x, pred_tokens], dim=1)  # [B_total, N_ctxt + N_mask, D]
-        
-        for block in self.blocks: x = block(x)
 
+        pred_tokens = self.mask_token.repeat(target_pos_embed.size(0), target_pos_embed.size(1), 1)
+        pred_tokens = pred_tokens + target_pos_embed  # [B_total, N_mask, pred_dim]
+        
+        x = x.repeat(len(masks), 1, 1)  # [B_total, N_ctxt, pred_dim]
+        
+        x = torch.cat([x, pred_tokens], dim=1)  # [B_total, N_ctxt + N_mask, pred_dim]
+        for block in self.blocks:
+            x = block(x)
+            
         x = self.predictor_norm(x)
         
-        x = x[:, N_ctxt:] 
-        x = self.predictor_proj(x)  # [B_total, N_mask, embed_dim]
+
+        N_ctxt = x.shape[1] - pred_tokens.shape[1]
+        x = x[:, N_ctxt:]  # [B_total, N_mask, pred_dim]
         
+        x = self.predictor_proj(x)  # [B_total, N_mask, embed_dim]
+
         return x
     
     def _apply_masks(self, x, masks):
