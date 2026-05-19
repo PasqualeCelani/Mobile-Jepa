@@ -1,7 +1,6 @@
 from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
 import torchvision.transforms as transforms
-from BlockMasking import *
 
 
 class Imagenet100(Dataset):
@@ -29,17 +28,7 @@ def make_transforms(
     ])
 
 
-def get_dataloader(batch_size=64, img_size=224, mask_params=None):
-    # Unpack mask parameters
-    patch_size = mask_params["patch_size"]
-    pred_mask_scale = mask_params["pred_mask_scale"]
-    enc_mask_scale = mask_params["enc_mask_scale"]
-    aspect_ratio = mask_params["aspect_ratio"]
-    num_enc_masks = mask_params["num_enc_masks"]
-    num_pred_masks = mask_params["num_pred_masks"]
-    allow_overlap = mask_params["allow_overlap"]
-    min_keep = mask_params["min_keep"]
-
+def get_dataloader(batch_size=64, img_size=224):
     dataset = load_dataset("clane9/imagenet-100")
     transform = make_transforms(crop_size=img_size)
     
@@ -47,23 +36,9 @@ def get_dataloader(batch_size=64, img_size=224, mask_params=None):
     train_ds = Imagenet100(dataset["train"], transform)
 
 
-    mask_collator = MaskCollator(
-        input_size=img_size,
-        patch_size=patch_size,
-        pred_mask_scale=pred_mask_scale,
-        enc_mask_scale=enc_mask_scale,
-        aspect_ratio=aspect_ratio,
-        nenc=num_enc_masks,
-        npred=num_pred_masks,
-        allow_overlap=allow_overlap,
-        min_keep=min_keep
-    )
-
-
     train_loader = DataLoader(
         train_ds, 
         batch_size=batch_size, 
-        collate_fn=mask_collator, 
         num_workers=6, 
         pin_memory=True, 
         persistent_workers=True,  

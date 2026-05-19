@@ -151,7 +151,6 @@ class ChannelBlock(nn.Module):
 class TinyNeXt(nn.Module):
     def __init__(
         self,
-        num_classes = 1000,
         depths  = [3, 3, 6, 2],
         widths = [32, 64, 96, 192],
         exp_ratios = [2.0, 2.0, 2.0, 2.0],
