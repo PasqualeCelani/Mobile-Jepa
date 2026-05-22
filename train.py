@@ -1,8 +1,36 @@
 import torch
-from ViT import *
+from UNet_JEPA import UNetJEPA_Encoder, UNetJEPA_Predictor
 from Dataset import get_dataloader
 from Schedulers import *
 import torch.nn.functional as F
+import os
+from tqdm import tqdm
+
+
+def save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, filename="checkpoint.pth"):
+    checkpoint = {
+        'epoch': epoch,
+        'encoder_state_dict': encoder.state_dict(),
+        'target_encoder_state_dict': target_encoder.state_dict(),
+        'predictor_state_dict': predictor.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+    }
+    torch.save(checkpoint, filename)
+    print(f"Checkpoint saved at epoch {epoch}")
+
+def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, scheduler):
+    if os.path.isfile(filename):
+        checkpoint = torch.load(filename)
+        encoder.load_state_dict(checkpoint['encoder_state_dict'])
+        target_encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
+        predictor.load_state_dict(checkpoint['predictor_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        print(f"Loaded checkpoint '{filename}' (resuming from epoch {start_epoch})")
+        return start_epoch
+    return 0
 
 
 #Same as ViT (techical dept)
@@ -27,9 +55,7 @@ def main():
     img_size = (224, 224)
     patch_size=16
     embed_dim=192
-    num_heads = 3
     predictor_embed_dim=96
-    dropout=0.1
 
     #Masking params
     enc_mask_scale=(0.85, 1.0)
@@ -59,7 +85,7 @@ def main():
     final_lr =  1.0e-06
     final_weight_decay =  0.4
     ipe_scale =  1.0
-    epochs =  1
+    epochs =  100
     weight_decay = 0.04
     ema = [0.996, 1.0]
     ######################################################################
@@ -67,17 +93,21 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    encoder = ViT_TinyL(
-        img_size[0], patch_size, embed_dim, num_heads, dropout
+    encoder = UNetJEPA_Encoder(
+        img_size[0], patch_size, embed_dim, is_target=False
     )
 
-    target_encoder = ViT_TinyL(
-        img_size[0], patch_size, embed_dim, num_heads, dropout
+    target_encoder = UNetJEPA_Encoder(
+        img_size[0], patch_size, embed_dim, is_target=True
     )
 
-    predictor = ViT_Predictor(
-        img_size[0], patch_size, embed_dim, num_heads, dropout, predictor_embed_dim
+    predictor = UNetJEPA_Predictor(
+        img_size[0], patch_size, embed_dim, predictor_embed_dim
     )
+
+    encoder.to(device)
+    predictor.to(device)
+    target_encoder.to(device)
 
     encoder.to(device)
     predictor.to(device)
@@ -128,12 +158,15 @@ def main():
     # momentum schedule
     momentum_scheduler = (ema[0] + i*(ema[1]-ema[0])/(iterations_per_epoch*epochs*ipe_scale)
                           for i in range(int(iterations_per_epoch*epochs*ipe_scale)+1))
+    
+    checkpoint_path = "checkpoint.pth"
+    start_epoch = load_checkpoint(checkpoint_path, encoder, target_encoder, predictor, optimizer, scheduler)
 
-    start_epoch = 0 
     for epoch in range(start_epoch, epochs):
         print(f"Epoch: {epoch+1}")
 
-        for udata, masks_enc, masks_pred in data_loader:
+        progress_bar = tqdm(data_loader, desc=f"Epoch {epoch+1}", unit="batch")
+        for i, (udata, masks_enc, masks_pred) in enumerate(progress_bar):
             imgs = udata.to(device, non_blocking=True)
 
             masks_enc = [m.to(device, non_blocking=True) for m in masks_enc]
@@ -153,7 +186,12 @@ def main():
             z = predictor(z, masks_enc, masks_pred)
 
             loss = F.smooth_l1_loss(z, h)
-            print(f"Loss: {loss}")
+            sim = F.cosine_similarity(z, h, dim=-1).mean().item()
+            
+            if i % 100 == 0:
+                progress_bar.set_description(
+                    f"Epoch {epoch+1} | Loss: {loss.item():.4f} | Sim: {sim:.4f} | Target Latent Std: {h.std(dim=0).mean().item():.4f}"
+                )
 
             loss.backward()
             optimizer.step()
@@ -162,8 +200,12 @@ def main():
             # momentum update of target encoder
             with torch.no_grad():
                 m = next(momentum_scheduler)
-                for param_q, param_k in zip(encoder.parameters(), target_encoder.parameters()):
+                for name, param_k in target_encoder.named_parameters():
+                    param_q = encoder.get_parameter(name)
                     param_k.data.mul_(m).add_((1.-m) * param_q.detach().data)
+        
+
+        save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, checkpoint_path)
 
 if __name__ == "__main__":
     main()
