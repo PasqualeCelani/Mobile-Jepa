@@ -51,7 +51,7 @@ def repeat_interleave_batch(x, B, repeat):
 
 def main():
     ############################## params ################################
-    #ViTs params
+    #U-net params
     img_size = (224, 224)
     patch_size=16
     embed_dim=192
@@ -104,10 +104,6 @@ def main():
     predictor = UNetJEPA_Predictor(
         img_size[0], patch_size, embed_dim, predictor_embed_dim
     )
-
-    encoder.to(device)
-    predictor.to(device)
-    target_encoder.to(device)
 
     encoder.to(device)
     predictor.to(device)

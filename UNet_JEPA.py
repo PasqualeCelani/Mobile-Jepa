@@ -160,3 +160,29 @@ class UNetJEPA_Predictor(nn.Module):
             m_keep = m_rep.unsqueeze(-1).expand(-1, -1, x.size(-1))
             all_x.append(torch.gather(x, dim=1, index=m_keep.long()))
         return torch.cat(all_x, dim=0)
+
+    
+class LinearProbeJEPA(nn.Module):
+    def __init__(self, encoder, embed_dim=192, num_classes=100):
+        super().__init__()
+        self.encoder = encoder
+        
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+            
+
+        self.head = nn.Linear(embed_dim, num_classes)
+
+        self.head.weight.data.normal_(mean=0.0, std=0.01)
+        self.head.bias.data.zero_()
+
+    def forward(self, x):
+        with torch.no_grad():
+            features = self.encoder(x) 
+            
+            if len(features.shape) == 3:
+                features = features.mean(dim=1)
+            elif len(features.shape) == 4:
+                features = features.mean(dim=[2, 3])
+                
+        return self.head(features)
