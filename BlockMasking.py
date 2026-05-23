@@ -148,17 +148,15 @@ class MaskCollator(object):
             collated_masks_pred.append(masks_p)
             acceptable_regions = masks_C
 
-            try:
-                if self.allow_overlap:
-                    acceptable_regions= None
-            except Exception as e:
-                print(f'[Error] Encountered exception in mask-generator {e}')
+            if self.allow_overlap:
+                acceptable_regions= None
 
             masks_e = []
             for _ in range(self.nenc):
                 mask, _ = self._sample_block_mask(e_size, acceptable_regions=acceptable_regions)
                 masks_e.append(mask)
                 min_keep_enc = min(min_keep_enc, len(mask))
+                
             collated_masks_enc.append(masks_e)
 
         collated_masks_pred = [[cm[:min_keep_pred] for cm in cm_list] for cm_list in collated_masks_pred]

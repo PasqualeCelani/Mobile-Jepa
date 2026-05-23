@@ -7,7 +7,6 @@ from Dataset import get_linear_probe_dataloaders
 import math
 
 def unnormalize(tensor, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
-    """Reverts ImageNet normalization for plotting."""
     for t, m, s in zip(tensor, mean, std):
         t.mul_(s).add_(m)
     return tensor
@@ -31,7 +30,7 @@ def plot_feature_maps(target_encoder, image, device, num_channels=16):
     if len(features.shape) == 2:
         num_patches, embed_dim = features.shape
         P = int(math.sqrt(num_patches))
-        # Swap axes to make it (Embed_Dim, Num_Patches) -> (Embed_Dim, P, P)
+        # Swap axes to make it (Embed_Dim, Num_Patches) --> (Embed_Dim, P, P)
         features = features.T.reshape(embed_dim, P, P)
     
     fig, axes = plt.subplots(4, 4, figsize=(10, 10))
