@@ -77,7 +77,6 @@ class UNetJEPA_Encoder(nn.Module):
         x = x + self.pos_embed
 
         if self.is_target:
-            # TARGET: Process full unmasked grid
             B, N, C = x.shape
             H = W = int(N**0.5)
             x = x.transpose(1, 2).reshape(B, C, H, W)
@@ -85,7 +84,6 @@ class UNetJEPA_Encoder(nn.Module):
             return x.flatten(2).transpose(1, 2)
             
         else:
-            # CONTEXT: Filter sequence, Bridge to CNN, Bridge back
             assert masks is not None, "Context Encoder requires masks"
             
             # Extract only visible patches

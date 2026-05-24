@@ -101,6 +101,8 @@ def main():
         img_size[0], patch_size, embed_dim, is_target=True
     )
 
+    target_encoder.load_state_dict(encoder.state_dict(), strict=False)
+
     predictor = UNetJEPA_Predictor(
         img_size[0], patch_size, embed_dim, predictor_embed_dim
     )
