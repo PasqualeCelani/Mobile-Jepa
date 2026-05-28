@@ -34,8 +34,8 @@ def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, sch
 def main():
     ############################## params ################################
     img_size = 224
-    patch_size = 16     # Still needed by MaskCollator to calculate grid sizes
-    features = 16       # U-Net base channel dimension (Replaces ViT embed_dim)
+    patch_size = 16    
+    features = 16      
 
     # Masking params
     enc_mask_scale = (0.25, 0.35)
@@ -80,11 +80,9 @@ def main():
     predictor.to(device)
     target_encoder.to(device)
 
-    # 2. Data & Optimizers
     data_loader = get_dataloader(batch_size, img_size, mask_params)
     iterations_per_epoch = len(data_loader)
 
-    # Separate parameters: apply weight decay only to 2D+ weights (not biases or BatchNorm 1D params)
     param_groups = [
         {'params': (p for n, p in encoder.named_parameters() if ('bias' not in n) and (len(p.shape) != 1))}, 
         {'params': (p for n, p in predictor.named_parameters() if ('bias' not in n) and (len(p.shape) != 1))}, 
@@ -103,7 +101,7 @@ def main():
         optimizer, ref_wd=weight_decay, final_wd=final_weight_decay,
         T_max=int(ipe_scale * epochs * iterations_per_epoch))
     
-    # Freeze target encoder for backprop
+
     for p in target_encoder.parameters():
         p.requires_grad = False
 
@@ -115,7 +113,6 @@ def main():
     start_epoch = load_checkpoint(checkpoint_path, encoder, target_encoder, predictor, optimizer, scheduler)
 
 
-    # ================= THE TRAINING LOOP =================
     for epoch in range(start_epoch, epochs):
         progress_bar = tqdm(data_loader, desc=f"Epoch {epoch+1}", unit="batch")
         
@@ -127,26 +124,24 @@ def main():
             scheduler.step()
             wd_scheduler.step()
 
-            optimizer.zero_grad()
 
-            # --- 1. TARGET ENCODER (No Gradients!) ---
             with torch.no_grad():
                 target_feats = target_encoder(imgs) 
                 # Shape: [B, 64, 224, 224]
 
-            # --- 2. CONTEXT ENCODER ---
+
             context_feats = encoder(imgs, masks_enc) 
             # Shape: [B * nenc, 64, H_crop, W_crop]
 
-            # --- 3. PREDICTOR & LOSS EXTRACTION ---
+
             # The predictor builds the canvas, runs the U-Net, and extracts the specific blocks
             pred_blocks, target_blocks = predictor(context_feats, target_feats, masks_enc, masks_pred)
             # Shapes: [B * npred, 64, H_pred, W_pred]
 
-            # --- 4. LOSS & BACKPROP ---
+
             loss = F.smooth_l1_loss(pred_blocks, target_blocks)
             
-            # Cosine similarity over the channel dimension (dim=1) for logging
+
             sim = F.cosine_similarity(pred_blocks, target_blocks, dim=1).mean().item()
             
             if i % 100 == 0:
@@ -158,7 +153,6 @@ def main():
             loss.backward()
             optimizer.step()
 
-            # --- 5. EMA UPDATE (Target Encoder) ---
             with torch.no_grad():
                 m = next(momentum_scheduler)
                 for name, param_k in target_encoder.named_parameters():

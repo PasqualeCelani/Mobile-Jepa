@@ -9,14 +9,13 @@ def main():
     features = 16 
     encoder = UNetJEPA_Encoder(img_size=224, features=features, is_target=True)
     
-    checkpoint = torch.load("checkpoint.pth", map_location=device)
+    checkpoint = torch.load("./training_results/round2/checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
     print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
-    
+
     model = LinearProbeJEPA(encoder, embed_dim=features * 8, num_classes=100).to(device)
-    
+
     train_loader, val_loader = get_linear_probe_dataloaders(batch_size=256)
-    
 
     optimizer = torch.optim.SGD(model.head.parameters(), lr=0.1, momentum=0.9, weight_decay=0)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=90)
@@ -69,6 +68,7 @@ def main():
             print(f"Saved new best model with Val Acc: {best_val_acc:.2f}%")
 
     print(f"\n Best Validation Accuracy: {best_val_acc:.2f}%")
+    
 
 if __name__ == "__main__":
     main()

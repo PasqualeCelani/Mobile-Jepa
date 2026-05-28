@@ -10,8 +10,8 @@ def main():
 
     mask_params = {
         "patch_size": 16, 
-        "enc_mask_scale": (0.25, 0.35),
-        "pred_mask_scale": (0.04, 0.06),
+        "enc_mask_scale": (0.40, 0.50),
+        "pred_mask_scale": (0.08, 0.12),
         "aspect_ratio": (0.75, 1.5),
         "num_enc_masks": 1,
         "num_pred_masks": 2,

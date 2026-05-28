@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class DoubleConv(nn.Module):
@@ -184,5 +185,7 @@ class LinearProbeJEPA(nn.Module):
                 features = features.mean(dim=1)
             elif len(features.shape) == 4:
                 features = features.mean(dim=[2, 3])
+
+            features = F.normalize(features, p=2, dim=1)         
                 
         return self.head(features)
