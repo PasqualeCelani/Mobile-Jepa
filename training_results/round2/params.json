@@ -1,0 +1,41 @@
+{
+
+    "model_params" : {
+        "img_size" : [224, 224],
+        "patch_size" : 16,
+        "features" : 16,
+
+        "cnn_unet_depth": {
+            "convs_per_block": 2,
+            "total_conv_layers_per_unet": 5,
+            "norm_layer": "BatchNorm2d",
+            "activation": "RELU"
+        }
+
+    },
+
+    "mask_params" : {
+        "patch_size" : 16,
+        "enc_mask_scale" : [0.25, 0.35],
+        "pred_mask_scale" : [0.04, 0.06],
+        "aspect_ratio" :  [0.75, 1.5],
+        "num_enc_masks" : 1,
+        "num_pred_masks" : 4,
+        "min_keep" : 10,
+        "allow_overlap" : false
+    },
+
+    "training_params" : {
+        "batch_size" : 64,
+        "warmup" : 10,
+        "start_lr" :  1.0e-06,
+        "lr" :  0.001,
+        "final_lr" :  1.0e-06,
+        "final_weight_decay" :  0.01,
+        "ipe_scale" :  1.0,
+        "epochs" :  100,
+        "weight_decay" : 0.01,
+        "ema" : [0.996, 1.0]
+    }
+    
+}

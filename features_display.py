@@ -1,111 +1,75 @@
 import torch
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.decomposition import PCA
 from UNet_JEPA import UNetJEPA_Encoder
 from Dataset import get_linear_probe_dataloaders
-import math
 
 def unnormalize(tensor, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
     for t, m, s in zip(tensor, mean, std):
         t.mul_(s).add_(m)
     return tensor
 
-def plot_feature_maps(target_encoder, image, device, num_channels=16):
-    target_encoder.eval()
+def extract_all_layer_features(image, encoder, device):
+    encoder.eval()
+    features_dict = {}
     with torch.no_grad():
-        features = target_encoder(image.unsqueeze(0).to(device))
+        x = image.unsqueeze(0).to(device)
+        x1 = encoder.cnn.inc(x)
+        features_dict['Layer 1 (inc)\n224x224'] = x1
+        x2 = encoder.cnn.down1(x1)
+        features_dict['Layer 2 (down1)\n112x112'] = x2
+        x3 = encoder.cnn.down2(x2)
+        features_dict['Layer 3 (down2)\n56x56'] = x3
+        x4 = encoder.cnn.down3(x3)
+        features_dict['Layer 4 (down3)\n28x28'] = x4
+        x5 = encoder.cnn.down4(x4)
+        x5 = encoder.cnn.norm(x5) 
+        features_dict['Layer 5 (Bottleneck)\n14x14'] = x5
+    for k, v in features_dict.items():
+        features_dict[k] = v[0].cpu().numpy()
+    return features_dict
+
+def plot_all_layers(features_dict):
+    max_channels = 64
     
-    # Move to CPU and remove batch dimension
-    features = features[0].cpu().numpy() # Expected shape: (C, H, W) or (Num_Patches, Embed_Dim)
-    
-    if len(features.shape) == 1:
-        raise ValueError(
-            f"The encoder output is completely flattened to {features.shape}. "
-            "To plot 2D feature maps, you must modify your UNetJEPA_Encoder's forward pass "
-            "to return the spatial feature maps (B, C, H, W) before global pooling is applied."
-        )
-    
-    # If the shape is (Num_Patches, Embed_Dim), reshape back to (Embed_Dim, P, P)
-    if len(features.shape) == 2:
-        num_patches, embed_dim = features.shape
-        P = int(math.sqrt(num_patches))
-        # Swap axes to make it (Embed_Dim, Num_Patches) --> (Embed_Dim, P, P)
-        features = features.T.reshape(embed_dim, P, P)
-    
-    fig, axes = plt.subplots(4, 4, figsize=(10, 10))
-    fig.suptitle('Target Encoder: Raw Feature Maps (First 16 Channels)', fontsize=16)
-    
-    for i, ax in enumerate(axes.flat):
-        if i < features.shape[0]:
-            ax.imshow(features[i], cmap='viridis')
-        ax.axis('off')
+    for layer_name, feats in features_dict.items():
+        C, _, _ = feats.shape
+        num_to_show = min(C, max_channels)
+        grid_size = int(np.ceil(np.sqrt(num_to_show)))
         
-    plt.tight_layout()
-    plt.show()
-
-def plot_pca_latents(target_encoder, image, device):
-    target_encoder.eval()
-    with torch.no_grad():
-        features = target_encoder(image.unsqueeze(0).to(device))
+        fig, axes = plt.subplots(grid_size, grid_size, figsize=(grid_size*2, grid_size*2))
+        fig.suptitle(f'{layer_name} - {num_to_show} Channels', fontsize=16)
         
-    features = features[0].cpu().numpy()
-    
-    if len(features.shape) == 1:
-        print("Skipping PCA: Target encoder output is a single 1D vector (pooled features).")
-        return
-
-    if len(features.shape) == 2:
-        num_patches, embed_dim = features.shape
-        P = int(math.sqrt(num_patches))
-        features = features.T.reshape(embed_dim, P, P)
+        for idx, ax in enumerate(axes.flatten()):
+            if idx < num_to_show:
+                channel_img = feats[idx]
+                channel_img = (channel_img - channel_img.min()) / (channel_img.max() - channel_img.min() + 1e-8)
+                ax.imshow(channel_img, cmap='viridis')
+            ax.axis('off')
         
-    C, H, W = features.shape
-    features_flat = features.transpose(1, 2, 0).reshape(-1, C)
-    
-    pca = PCA(n_components=3)
-    pca_features = pca.fit_transform(features_flat)
-    
-    pca_features = (pca_features - pca_features.min(axis=0)) / (pca_features.max(axis=0) - pca_features.min(axis=0))
-    pca_img = pca_features.reshape(H, W, 3)
-    
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-    
-    img_display = unnormalize(image.clone()).permute(1, 2, 0).cpu().numpy()
-    img_display = np.clip(img_display, 0, 1)
-    
-    ax1.imshow(img_display)
-    ax1.set_title("Original Image")
-    ax1.axis('off')
-    
-    ax2.imshow(pca_img)
-    ax2.set_title("PCA of Latent Space (RGB)")
-    ax2.axis('off')
-    
-    plt.tight_layout()
-    plt.show()
-
-
+        plt.tight_layout()
+        plt.show()
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
 
-    encoder = UNetJEPA_Encoder(img_size=224, patch_size=16, embed_dim=192, is_target=True)
+    features = 16 
+    encoder = UNetJEPA_Encoder(img_size=224, features=features, is_target=True)
     encoder.to(device)
-        
 
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
     print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
 
     _, val_loader = get_linear_probe_dataloaders(batch_size=256)
+    images, _ = next(iter(val_loader))
 
-    images, labels = next(iter(val_loader))
-    single_image = images[0] 
+    single_image = images[0]
 
-    plot_feature_maps(encoder, single_image, device)
-    plot_pca_latents(encoder, single_image, device)
+
+    features_dict = extract_all_layer_features(single_image, encoder, device)
+    plot_all_layers(features_dict)
 
 if __name__ == "__main__":
     main()
