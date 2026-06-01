@@ -36,6 +36,8 @@
         "epochs" :  100,
         "weight_decay" : 0.01,
         "ema" : [0.996, 1.0]
-    }
-    
+    },
+
+    "training_time_hours" : 21
+     
 }

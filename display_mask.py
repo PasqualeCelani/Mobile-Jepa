@@ -11,10 +11,10 @@ def main():
     mask_params = {
         "patch_size": 16, 
         "enc_mask_scale": (0.40, 0.50),
-        "pred_mask_scale": (0.08, 0.12),
+        "pred_mask_scale": (0.05, 0.08),
         "aspect_ratio": (0.75, 1.5),
         "num_enc_masks": 1,
-        "num_pred_masks": 2,
+        "num_pred_masks": 6,
         "min_keep": 10,
         "allow_overlap": False
     }

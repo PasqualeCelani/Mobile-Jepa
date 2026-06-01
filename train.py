@@ -6,7 +6,7 @@ from UNet_JEPA import UNetJEPA_Encoder, UNetJEPA_Predictor
 from Dataset import get_dataloader
 from Schedulers import WarmupCosineSchedule, CosineWDSchedule
 
-def save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, filename="checkpoint.pth"):
+def save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, filename="checkpoint.pth"):
     checkpoint = {
         'epoch': epoch,
         'encoder_state_dict': encoder.state_dict(),
@@ -14,11 +14,12 @@ def save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, schedu
         'predictor_state_dict': predictor.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
+        'wd_scheduler_state_dict': wd_scheduler.state_dict(), 
     }
     torch.save(checkpoint, filename)
     print(f"Checkpoint saved at epoch {epoch}")
 
-def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, scheduler):
+def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler):
     if os.path.isfile(filename):
         checkpoint = torch.load(filename)
         encoder.load_state_dict(checkpoint['encoder_state_dict'])
@@ -26,6 +27,7 @@ def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, sch
         predictor.load_state_dict(checkpoint['predictor_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        wd_scheduler.load_state_dict(checkpoint['wd_scheduler_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
         print(f"Loaded checkpoint '{filename}' (resuming from epoch {start_epoch})")
         return start_epoch
@@ -38,11 +40,11 @@ def main():
     features = 16      
 
     # Masking params
-    enc_mask_scale = (0.25, 0.35)
-    pred_mask_scale = (0.04, 0.06)
+    enc_mask_scale = (0.40, 0.50)
+    pred_mask_scale = (0.05, 0.08)
     aspect_ratio = (0.75, 1.5)
     num_enc_masks = 1
-    num_pred_masks = 4
+    num_pred_masks = 6
     min_keep = 10
     allow_overlap = False
 
@@ -54,11 +56,11 @@ def main():
     }
 
     # Training parameters
-    batch_size = 64     
+    batch_size = 128     
     warmup = 10
-    start_lr = 1.0e-06
-    lr = 0.001
-    final_lr = 1.0e-06
+    start_lr = 2.0e-06
+    lr = 0.002
+    final_lr = 2.0e-06
     final_weight_decay =  0.01
     ipe_scale = 1.0
     epochs = 100
@@ -104,13 +106,10 @@ def main():
 
     for p in target_encoder.parameters():
         p.requires_grad = False
-
-    # Momentum schedule for EMA
-    momentum_scheduler = (ema[0] + i*(ema[1]-ema[0])/(iterations_per_epoch*epochs*ipe_scale)
-                          for i in range(int(iterations_per_epoch*epochs*ipe_scale)+1))
     
+    total_steps = int(iterations_per_epoch * epochs * ipe_scale)
     checkpoint_path = "checkpoint.pth"
-    start_epoch = load_checkpoint(checkpoint_path, encoder, target_encoder, predictor, optimizer, scheduler)
+    start_epoch = load_checkpoint(checkpoint_path, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler)
 
 
     for epoch in range(start_epoch, epochs):
@@ -152,14 +151,16 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            
+            global_step = epoch * iterations_per_epoch + i
+            m = ema[0] + global_step * (ema[1] - ema[0]) / total_steps
 
             with torch.no_grad():
-                m = next(momentum_scheduler)
                 for name, param_k in target_encoder.named_parameters():
                     param_q = encoder.get_parameter(name)
                     param_k.data.mul_(m).add_((1. - m) * param_q.detach().data)
         
-        save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, checkpoint_path)
+        save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, checkpoint_path)
 
 if __name__ == "__main__":
     main()

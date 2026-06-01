@@ -9,7 +9,7 @@ def main():
     features = 16 
     encoder = UNetJEPA_Encoder(img_size=224, features=features, is_target=True)
     
-    checkpoint = torch.load("./training_results/round2/checkpoint.pth", map_location=device)
+    checkpoint = torch.load("./training_results/round3/checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
     print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
 
