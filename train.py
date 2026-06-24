@@ -5,6 +5,7 @@ from tqdm import tqdm
 from UNet_JEPA import UNetJEPA_Encoder, UNetJEPA_Predictor 
 from Dataset import get_dataloader
 from Schedulers import WarmupCosineSchedule, CosineWDSchedule
+from config import get_config
 
 def save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, filename="checkpoint.pth"):
     checkpoint = {
@@ -35,37 +36,27 @@ def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, sch
 
 def main():
     ############################## params ################################
-    img_size = 96
-    patch_size = 16    
-    features = 16      
+    params = get_config("./params.json")
+
+    img_size = params["model_params"]["img_size"][0]
+    patch_size = params["model_params"]["patch_size"]    
+    features = params["model_params"]["features"]      
 
     # Masking params
-    enc_mask_scale = (0.40, 0.50)
-    pred_mask_scale = (0.05, 0.08)
-    aspect_ratio = (0.75, 1.5)
-    num_enc_masks = 1
-    num_pred_masks = 6
-    min_keep = 1
-    allow_overlap = False
-
-    mask_params = {
-        "patch_size": patch_size, "enc_mask_scale": enc_mask_scale,
-        "pred_mask_scale": pred_mask_scale, "aspect_ratio": aspect_ratio,
-        "num_enc_masks": num_enc_masks, "num_pred_masks": num_pred_masks,
-        "min_keep": min_keep, "allow_overlap": allow_overlap
-    }
+    mask_params = params["mask_params"]
 
     # Training parameters
-    batch_size = 128     
-    warmup = 10
-    start_lr = 2.0e-06
-    lr = 0.002
-    final_lr = 2.0e-06
-    final_weight_decay =  0.01
-    ipe_scale = 1.0
-    epochs = 100
-    weight_decay =  0.01
-    ema = [0.996, 1.0]
+    batch_size = params["training_params"]["batch_size"]     
+    warmup = params["training_params"]["warmup"]
+    start_lr = params["training_params"]["start_lr"]
+    lr = params["training_params"]["lr"]
+    final_lr = params["training_params"]["final_lr"]
+    final_weight_decay = params["training_params"]["final_weight_decay"]
+    ipe_scale = params["training_params"]["ipe_scale"]
+    epochs = params["training_params"]["epochs"]
+    weight_decay =  params["training_params"]["weight_decay"]
+    ema = params["training_params"]["ema"]
+    dataset_name = ["training_params"]["dataset-name"]
     ######################################################################
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -82,7 +73,7 @@ def main():
     predictor.to(device)
     target_encoder.to(device)
 
-    data_loader = get_dataloader(batch_size, img_size, mask_params, dataset_name="cifar-10")
+    data_loader = get_dataloader(batch_size, img_size, mask_params, dataset_name)
     iterations_per_epoch = len(data_loader)
 
     param_groups = [

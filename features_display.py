@@ -3,7 +3,8 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
 from UNet_JEPA import UNetJEPA_Encoder
-from Dataset import get_linear_probe_dataloaders
+from Dataset import get_linear_probe_dataloaders, DATASET_REGISTRY
+from config import get_config
 
 def unnormalize(tensor, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
     for t, m, s in zip(tensor, mean, std):
@@ -35,13 +36,13 @@ def extract_all_layer_features(image, encoder, device):
 
     return features_dict
 
-def plot_all_layers(features_dict):
+def plot_all_layers(features_dict, mean, std):
     max_channels = 64
     
     for layer_name, feats in features_dict.items():
         if 'Original' in layer_name:
             img_tensor = torch.tensor(feats)
-            img_tensor = unnormalize(img_tensor).clamp(0, 1)
+            img_tensor = unnormalize(img_tensor, mean, std).clamp(0, 1)
             img_np = img_tensor.permute(1, 2, 0).numpy()
             
             fig, ax = plt.subplots(1, 1, figsize=(4, 4))
@@ -80,10 +81,17 @@ def plot_all_layers(features_dict):
         plt.close(fig)
 
 def main():
+    params = get_config("./params.json")
+
+    img_size = params["model_params"]["img_size"][0]
+    features = params["model_params"]["features"]
+    dataset_name = params["training_params"]["dataset-name"]
+
+    dataset_cfg = DATASET_REGISTRY[dataset_name]
+    mean, std = dataset_cfg.normalization
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    features = 16
-    img_size = 96 
     encoder = UNetJEPA_Encoder(img_size=img_size, features=features, is_target=True)
     encoder.to(device)
 
@@ -91,14 +99,14 @@ def main():
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
     print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
 
-    _, val_loader = get_linear_probe_dataloaders(batch_size=256, img_size=img_size, dataset_name="cifar-10")
+    _, val_loader = get_linear_probe_dataloaders(batch_size=256, img_size=img_size, dataset_name=dataset_name)
     images, _ = next(iter(val_loader))
 
-    single_image = images[2]
+    single_image = images[1]
 
 
     features_dict = extract_all_layer_features(single_image, encoder, device)
-    plot_all_layers(features_dict)
+    plot_all_layers(features_dict, mean, std)
 
 if __name__ == "__main__":
     main()

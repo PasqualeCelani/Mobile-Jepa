@@ -1,7 +1,6 @@
 {
-
     "model_params" : {
-        "img_size" : [224, 224],
+        "img_size" : [96, 96],
         "patch_size" : 16,
         "features" : 16,
 
@@ -21,7 +20,7 @@
         "aspect_ratio" :  [0.75, 1.5],
         "num_enc_masks" : 1,
         "num_pred_masks" : 6,
-        "min_keep" : 10,
+        "min_keep" : 1,
         "allow_overlap" : false
     },
 
@@ -36,9 +35,27 @@
         "epochs" :  100,
         "weight_decay" : 0.01,
         "ema" : [0.996, 1.0],
-        "dataset-name" : "imagenet-100",
+        "dataset-name" : "cifar-10",
         "optimizer" : "AdamW",
-        "training_time_hours" : 10
+        "training_time_hours" : null
+    },
+
+    "test_params" : {
+        "knn" : {
+            "batch_size" : 128,
+            "dataset-name" : "cifar-10",
+            "k" : 20
+        },
+        "linear" : {
+            "batch_size" : 128,
+            "dataset-name" : "cifar-10",
+            "num_classes" : 10,
+            "epochs" : 90,
+            "lr" : 0.1,
+            "momentum" : 0.9,
+            "weight_decay" : 0,
+            "T_max" : 90,
+            "optimizer" : "SGD"
+        }
     }
-     
 }

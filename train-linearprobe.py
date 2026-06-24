@@ -2,26 +2,38 @@ import torch
 from UNet_JEPA import UNetJEPA_Encoder, LinearProbeJEPA
 from Dataset import get_linear_probe_dataloaders
 import torch.nn as nn
+from config import get_config
 
 def main():
+    params = get_config("./params.json")
+
+    img_size = params["model_params"]["img_size"][0]   
+    features = params["model_params"]["features"] 
+    batch_size = params["test_params"]["linear"]["batch_size"]
+    lr = params["test_params"]["linear"]["lr"]
+    momentum = params["test_params"]["linear"]["momentum"]
+    weight_decay = params["test_params"]["linear"]["weight_decay"]
+    T_max = params["test_params"]["linear"]["T_max"]
+    num_classes = params["test_params"]["linear"]["num_classes"]
+    dataset_name = params["test_params"]["knn"]["dataset-name"]
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    features = 16 
-    encoder = UNetJEPA_Encoder(img_size=224, features=features, is_target=True)
+    encoder = UNetJEPA_Encoder(img_size=img_size, features=features, is_target=True)
     
-    checkpoint = torch.load("./training_results/round3/checkpoint.pth", map_location=device)
+    checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
     print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
 
-    model = LinearProbeJEPA(encoder, embed_dim=features * 8, num_classes=100).to(device)
+    model = LinearProbeJEPA(encoder, embed_dim=features * 8, num_classes=num_classes).to(device)
 
-    train_loader, val_loader = get_linear_probe_dataloaders(batch_size=256)
+    train_loader, val_loader = get_linear_probe_dataloaders(batch_size=batch_size, img_size=img_size, dataset_name=dataset_name)
 
-    optimizer = torch.optim.SGD(model.head.parameters(), lr=0.1, momentum=0.9, weight_decay=0)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=90)
+    optimizer = torch.optim.SGD(model.head.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max)
     criterion = nn.CrossEntropyLoss()
     
-    epochs = 90
+    epochs = params["test_params"]["linear"]["epochs"]
     best_val_acc = 0.0
     
     for epoch in range(epochs):

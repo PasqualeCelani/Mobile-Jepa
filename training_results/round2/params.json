@@ -35,9 +35,10 @@
         "ipe_scale" :  1.0,
         "epochs" :  100,
         "weight_decay" : 0.01,
-        "ema" : [0.996, 1.0]
-    },
-
-    "training_time_hours" : 21
+        "ema" : [0.996, 1.0],
+        "dataset-name" : "imagenet-100",
+        "optimizer" : "AdamW",
+        "training_time_hours" : 21
+    }
      
 }

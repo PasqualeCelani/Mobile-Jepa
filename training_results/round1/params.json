@@ -47,7 +47,9 @@
         "ipe_scale" :  1.0,
         "epochs" :  100,
         "weight_decay" : 0.04,
-        "ema" : [0.996, 1.0]
+        "ema" : [0.996, 1.0],
+        "dataset-name" : "imagenet-100",
+        "optimizer" : "AdamW"
     }
     
 }

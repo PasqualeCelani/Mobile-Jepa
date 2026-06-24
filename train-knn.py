@@ -1,6 +1,7 @@
 import torch, torch.nn.functional as F
 from UNet_JEPA import UNetJEPA_Encoder
 from Dataset import get_linear_probe_dataloaders
+from config import get_config
 
 
 def knn_eval(encoder, train_loader, val_loader, device, k=20):
@@ -31,10 +32,17 @@ def knn_eval(encoder, train_loader, val_loader, device, k=20):
 
 
 def main():
+    params = get_config("./params.json")
+
+    img_size = params["model_params"]["img_size"][0]   
+    features = params["model_params"]["features"]  
+    batch_size = params["test_params"]["knn"]["batch_size"]
+    dataset_name = params["test_params"]["knn"]["dataset-name"]
+    k = params["test_params"]["knn"]["k"]
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    features = 16 
-    encoder = UNetJEPA_Encoder(img_size=96, features=features, is_target=True)
+    encoder = UNetJEPA_Encoder(img_size=img_size, features=features, is_target=True)
     
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
@@ -42,9 +50,9 @@ def main():
 
     encoder.to(device)
 
-    train_loader, val_loader = get_linear_probe_dataloaders(batch_size=256, img_size=96)
+    train_loader, val_loader = get_linear_probe_dataloaders(batch_size=batch_size, img_size=img_size, dataset_name=dataset_name)
 
-    knn_eval(encoder, train_loader, val_loader, device)
+    knn_eval(encoder, train_loader, val_loader, device, k)
     
     
 

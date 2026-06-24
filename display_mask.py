@@ -2,25 +2,21 @@ import torch
 import torchvision.transforms as T
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
-from Dataset import get_dataloader
+from Dataset import get_dataloader, DATASET_REGISTRY
+from config import get_config
 
 def main():
-    img_size = 96
-    
+    params = get_config("./params.json")
 
-    mask_params = {
-        "patch_size": 16, 
-        "enc_mask_scale": (0.40, 0.50),
-        "pred_mask_scale": (0.05, 0.08),
-        "aspect_ratio": (0.75, 1.5),
-        "num_enc_masks": 1,
-        "num_pred_masks": 6,
-        "min_keep": 1,
-        "allow_overlap": False
-    }
+    img_size = params["model_params"]["img_size"][0]
+    mask_params = params["mask_params"]
+    dataset_name = params["training_params"]["dataset-name"]
+
+    dataset_cfg = DATASET_REGISTRY[dataset_name]
+    mean, std = dataset_cfg.normalization
 
     print("Loading dataloader...")
-    data_loader = get_dataloader(batch_size=32, img_size=img_size, mask_params=mask_params, dataset_name="cifar-10")
+    data_loader = get_dataloader(batch_size=32, img_size=img_size, mask_params=mask_params, dataset_name=dataset_name)
     
 
     imgs, masks_enc, masks_pred = next(iter(data_loader))
@@ -31,8 +27,8 @@ def main():
     
   
     inv_normalize = T.Normalize(
-        mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
-        std=[1/0.229, 1/0.224, 1/0.225]
+        mean=[-m / s for m, s in zip(mean, std)],
+        std=[1.0 / s for s in std]
     )
     imgs = inv_normalize(imgs).clamp(0, 1)
 
