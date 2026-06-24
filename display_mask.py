@@ -5,7 +5,7 @@ from torchvision.utils import make_grid
 from Dataset import get_dataloader
 
 def main():
-    img_size = 224
+    img_size = 96
     
 
     mask_params = {
@@ -15,12 +15,12 @@ def main():
         "aspect_ratio": (0.75, 1.5),
         "num_enc_masks": 1,
         "num_pred_masks": 6,
-        "min_keep": 10,
+        "min_keep": 1,
         "allow_overlap": False
     }
 
     print("Loading dataloader...")
-    data_loader = get_dataloader(batch_size=32, img_size=img_size, mask_params=mask_params)
+    data_loader = get_dataloader(batch_size=32, img_size=img_size, mask_params=mask_params, dataset_name="cifar-10")
     
 
     imgs, masks_enc, masks_pred = next(iter(data_loader))
@@ -78,7 +78,6 @@ def main():
     plt.axis('off')
     plt.title("U-JEPA masks: RED = prediction target | BLUE = context encoder", fontsize=16)
     plt.savefig('masked_image_grid.png', bbox_inches='tight', pad_inches=0.1)
-    print("Saved to masked_image_grid.png")
     plt.show()
     plt.close()
 

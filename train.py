@@ -35,7 +35,7 @@ def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, sch
 
 def main():
     ############################## params ################################
-    img_size = 224
+    img_size = 96
     patch_size = 16    
     features = 16      
 
@@ -45,7 +45,7 @@ def main():
     aspect_ratio = (0.75, 1.5)
     num_enc_masks = 1
     num_pred_masks = 6
-    min_keep = 10
+    min_keep = 1
     allow_overlap = False
 
     mask_params = {
@@ -82,7 +82,7 @@ def main():
     predictor.to(device)
     target_encoder.to(device)
 
-    data_loader = get_dataloader(batch_size, img_size, mask_params)
+    data_loader = get_dataloader(batch_size, img_size, mask_params, dataset_name="cifar-10")
     iterations_per_epoch = len(data_loader)
 
     param_groups = [

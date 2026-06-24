@@ -13,27 +13,50 @@ def unnormalize(tensor, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
 def extract_all_layer_features(image, encoder, device):
     encoder.eval()
     features_dict = {}
+
+    features_dict['Original'] = image.unsqueeze(0)
+
     with torch.no_grad():
         x = image.unsqueeze(0).to(device)
         x1 = encoder.cnn.inc(x)
-        features_dict['Layer 1 (inc)\n224x224'] = x1
+        features_dict['Layer 1 (inc)'] = x1
         x2 = encoder.cnn.down1(x1)
-        features_dict['Layer 2 (down1)\n112x112'] = x2
+        features_dict['Layer 2 (down1)'] = x2
         x3 = encoder.cnn.down2(x2)
-        features_dict['Layer 3 (down2)\n56x56'] = x3
+        features_dict['Layer 3 (down2)'] = x3
         x4 = encoder.cnn.down3(x3)
-        features_dict['Layer 4 (down3)\n28x28'] = x4
+        features_dict['Layer 4 (down3)'] = x4
         x5 = encoder.cnn.down4(x4)
         x5 = encoder.cnn.norm(x5) 
-        features_dict['Layer 5 (Bottleneck)\n14x14'] = x5
+        features_dict['Layer 5 (Bottleneck)'] = x5
+
     for k, v in features_dict.items():
         features_dict[k] = v[0].cpu().numpy()
+
     return features_dict
 
 def plot_all_layers(features_dict):
     max_channels = 64
     
     for layer_name, feats in features_dict.items():
+        if 'Original' in layer_name:
+            img_tensor = torch.tensor(feats)
+            img_tensor = unnormalize(img_tensor).clamp(0, 1)
+            img_np = img_tensor.permute(1, 2, 0).numpy()
+            
+            fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+            fig.suptitle(f'{layer_name}', fontsize=16)
+            ax.imshow(img_np)
+            ax.axis('off')
+            plt.tight_layout()
+            
+            safe_filename = layer_name.replace('\n', '_').replace(' ', '_').replace('(', '').replace(')', '')
+            filename = f"{safe_filename}.png"
+            plt.savefig(filename, bbox_inches='tight')
+            plt.close(fig)
+
+            continue
+
         C, _, _ = feats.shape
         num_to_show = min(C, max_channels)
         grid_size = int(np.ceil(np.sqrt(num_to_show)))
@@ -49,23 +72,29 @@ def plot_all_layers(features_dict):
             ax.axis('off')
         
         plt.tight_layout()
-        plt.show()
+        
+        safe_filename = layer_name.replace('\n', '_').replace(' ', '_').replace('(', '').replace(')', '')
+        filename = f"{safe_filename}.png"
+        
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close(fig)
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    features = 16 
-    encoder = UNetJEPA_Encoder(img_size=224, features=features, is_target=True)
+    features = 16
+    img_size = 96 
+    encoder = UNetJEPA_Encoder(img_size=img_size, features=features, is_target=True)
     encoder.to(device)
 
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
     print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
 
-    _, val_loader = get_linear_probe_dataloaders(batch_size=256)
+    _, val_loader = get_linear_probe_dataloaders(batch_size=256, img_size=img_size, dataset_name="cifar-10")
     images, _ = next(iter(val_loader))
 
-    single_image = images[0]
+    single_image = images[2]
 
 
     features_dict = extract_all_layer_features(single_image, encoder, device)

@@ -34,7 +34,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     features = 16 
-    encoder = UNetJEPA_Encoder(img_size=224, features=features, is_target=True)
+    encoder = UNetJEPA_Encoder(img_size=96, features=features, is_target=True)
     
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
@@ -42,7 +42,7 @@ def main():
 
     encoder.to(device)
 
-    train_loader, val_loader = get_linear_probe_dataloaders(batch_size=256)
+    train_loader, val_loader = get_linear_probe_dataloaders(batch_size=256, img_size=96)
 
     knn_eval(encoder, train_loader, val_loader, device)
     
