@@ -1,5 +1,5 @@
 import torch, torch.nn.functional as F
-from UNet_JEPA import UNetJEPA_Encoder
+from Mobile_JEPA import MobileJEPA_Encoder
 from Dataset import get_linear_probe_dataloaders
 from config import get_config
 
@@ -42,7 +42,7 @@ def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    encoder = UNetJEPA_Encoder(img_size=img_size, features=features, is_target=True)
+    encoder = MobileJEPA_Encoder(img_size=img_size, features=features, is_target=True)
     
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])

@@ -2,10 +2,27 @@ import torch
 import torch.nn.functional as F
 import os
 from tqdm import tqdm
-from UNet_JEPA import UNetJEPA_Encoder, UNetJEPA_Predictor 
+from Mobile_JEPA import MobileJEPA_Encoder, MobileJEPA_Predictor 
 from Dataset import get_dataloader
 from Schedulers import WarmupCosineSchedule, CosineWDSchedule
 from config import get_config
+import matplotlib.pyplot as plt
+
+def plot_loss_curve(epoch_list, loss_list, save_path="loss_ssl.png"):
+    if not epoch_list:
+        return
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epoch_list, loss_list, marker='o', linestyle='-', markersize=3, label='Loss')
+    plt.title('Training Loss Progress')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.close()
+
 
 def save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, filename="checkpoint.pth"):
     checkpoint = {
@@ -56,18 +73,18 @@ def main():
     epochs = params["training_params"]["epochs"]
     weight_decay =  params["training_params"]["weight_decay"]
     ema = params["training_params"]["ema"]
-    dataset_name = ["training_params"]["dataset-name"]
+    dataset_name = params["training_params"]["dataset-name"]
     ######################################################################
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    encoder = UNetJEPA_Encoder(img_size, features=features, is_target=False)
-    target_encoder = UNetJEPA_Encoder(img_size, features=features, is_target=True)
+    encoder = MobileJEPA_Encoder(img_size, features=features, is_target=False)
+    target_encoder = MobileJEPA_Encoder(img_size, features=features, is_target=True)
     
     target_encoder.load_state_dict(encoder.state_dict())
     
-    predictor = UNetJEPA_Predictor(img_size, features=features) 
+    predictor = MobileJEPA_Predictor(img_size, features=features) 
 
     encoder.to(device)
     predictor.to(device)
@@ -102,56 +119,66 @@ def main():
     checkpoint_path = "checkpoint.pth"
     start_epoch = load_checkpoint(checkpoint_path, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler)
 
+    epoch_numbers = []
+    epoch_losses  = []
 
-    for epoch in range(start_epoch, epochs):
-        progress_bar = tqdm(data_loader, desc=f"Epoch {epoch+1}", unit="batch")
-        
-        for i, (imgs, masks_enc, masks_pred) in enumerate(progress_bar):
-            imgs = imgs.to(device, non_blocking=True)
-            masks_enc = masks_enc.to(device, non_blocking=True)
-            masks_pred = masks_pred.to(device, non_blocking=True)
-
-            scheduler.step()
-            wd_scheduler.step()
-
-
-            with torch.no_grad():
-                target_feats = target_encoder(imgs) 
-                # Shape: [B, 64, 224, 224]
-
-
-            context_feats = encoder(imgs, masks_enc) 
-            # Shape: [B * nenc, 64, H_crop, W_crop]
-
-
-            # The predictor builds the canvas, runs the U-Net, and extracts the specific blocks
-            pred_blocks, target_blocks = predictor(context_feats, target_feats, masks_enc, masks_pred)
-            # Shapes: [B * npred, 64, H_pred, W_pred]
-
-
-            loss = F.smooth_l1_loss(pred_blocks, target_blocks)
+    try:
+        for epoch in range(start_epoch, epochs):
+            progress_bar = tqdm(data_loader, desc=f"Epoch {epoch+1}", unit="batch")
             
+            for i, (imgs, masks_enc, masks_pred) in enumerate(progress_bar):
+                imgs = imgs.to(device, non_blocking=True)
+                masks_enc = masks_enc.to(device, non_blocking=True)
+                masks_pred = masks_pred.to(device, non_blocking=True)
 
-            sim = F.cosine_similarity(pred_blocks, target_blocks, dim=1).mean().item()
+                scheduler.step()
+                wd_scheduler.step()
+
+
+                with torch.no_grad():
+                    target_feats = target_encoder(imgs) 
+                    # Shape: [B, 64, 224, 224]
+
+
+                context_feats = encoder(imgs, masks_enc) 
+                # Shape: [B * nenc, 64, H_crop, W_crop]
+
+
+                # The predictor builds the canvas, runs the U-Net, and extracts the specific blocks
+                pred_blocks, target_blocks = predictor(context_feats, target_feats, masks_enc, masks_pred)
+                # Shapes: [B * npred, 64, H_pred, W_pred]
+
+
+                loss = F.smooth_l1_loss(pred_blocks, target_blocks)
+                
+
+                sim = F.cosine_similarity(pred_blocks, target_blocks, dim=1).mean().item()
+                
+                if i % 100 == 0:
+                    progress_bar.set_description(
+                        f"Epoch {epoch+1} | Loss: {loss.item():.4f} | Sim: {sim:.4f}"
+                    )
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                global_step = epoch * iterations_per_epoch + i
+                m = ema[0] + global_step * (ema[1] - ema[0]) / total_steps
+
+                with torch.no_grad():
+                    for name, param_k in target_encoder.named_parameters():
+                        param_q = encoder.get_parameter(name)
+                        param_k.data.mul_(m).add_((1. - m) * param_q.detach().data)
             
-            if i % 100 == 0:
-                progress_bar.set_description(
-                    f"Epoch {epoch+1} | Loss: {loss.item():.4f} | Sim: {sim:.4f}"
-                )
+            epoch_numbers.append(epoch + 1)
+            epoch_losses.append(loss.item())
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            
-            global_step = epoch * iterations_per_epoch + i
-            m = ema[0] + global_step * (ema[1] - ema[0]) / total_steps
+            save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, checkpoint_path)
+    except KeyboardInterrupt:
+        plot_loss_curve(epoch_numbers, epoch_losses)
 
-            with torch.no_grad():
-                for name, param_k in target_encoder.named_parameters():
-                    param_q = encoder.get_parameter(name)
-                    param_k.data.mul_(m).add_((1. - m) * param_q.detach().data)
-        
-        save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, checkpoint_path)
+    plot_loss_curve(epoch_numbers, epoch_losses)
 
 if __name__ == "__main__":
     main()
