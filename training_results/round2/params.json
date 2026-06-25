@@ -39,6 +39,27 @@
         "dataset-name" : "imagenet-100",
         "optimizer" : "AdamW",
         "training_time_hours" : 21
+    },
+
+    "test_params" : {
+        "knn" : {
+            "batch_size" : 128,
+            "dataset-name" : "imagenet-100",
+            "k" : 20,
+            "accuracy-top1" : 1.7
+        },
+        "linear" : {
+            "batch_size" : 128,
+            "dataset-name" : "imagenet-100",
+            "num_classes" : 100,
+            "epochs" : 90,
+            "lr" : 0.1,
+            "momentum" : 0.9,
+            "weight_decay" : 0,
+            "T_max" : 90,
+            "optimizer" : "SGD",
+            "accuracy-top1" : 2.1
+        }
     }
      
 }

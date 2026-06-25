@@ -2,11 +2,18 @@ import torch
 import torchvision.transforms as T
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
-from Dataset import get_dataloader, DATASET_REGISTRY
-from config import get_config
+
+import sys
+import os
+from pathlib import Path
+src_path = Path(__file__).resolve().parent.parent  
+sys.path.insert(0, str(src_path))
+
+from data.Dataset import get_dataloader, DATASET_REGISTRY
+from utils.config import get_config
 
 def main():
-    params = get_config("./params.json")
+    params = get_config("../../training_results/params.json")
 
     img_size = params["model_params"]["img_size"][0]
     mask_params = params["mask_params"]

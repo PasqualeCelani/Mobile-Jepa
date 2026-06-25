@@ -1,11 +1,20 @@
 import torch
-from Mobile_JEPA import MobileJEPA_Encoder, LinearProbeJEPA
-from Dataset import get_linear_probe_dataloaders
 import torch.nn as nn
-from config import get_config
+
+import sys
+import os
+from pathlib import Path
+project_root = Path(__file__).resolve().parent.parent
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
+
+
+from models.Mobile_JEPA import MobileJEPA_Encoder, LinearProbeJEPA
+from data.Dataset import get_linear_probe_dataloaders
+from utils.config import get_config
 
 def main():
-    params = get_config("./params.json")
+    params = get_config("../training_results/params.json")
 
     img_size = params["model_params"]["img_size"][0]   
     features = params["model_params"]["features"] 

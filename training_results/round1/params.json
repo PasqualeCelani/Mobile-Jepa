@@ -50,6 +50,8 @@
         "ema" : [0.996, 1.0],
         "dataset-name" : "imagenet-100",
         "optimizer" : "AdamW"
-    }
+    },
+
+    "comment" : "This was a very first try i was doing trying to Vitfy the CNN to be able to handle variable length, the outcome is a failure, even trough it reach 3% on linea passing the random for a bit."
     
 }

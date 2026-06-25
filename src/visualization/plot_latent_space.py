@@ -3,12 +3,20 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-from config import get_config
-from Mobile_JEPA import MobileJEPA_Encoder
-from Dataset import get_linear_probe_dataloaders
+
+import sys
+import os
+from pathlib import Path
+src_path = Path(__file__).resolve().parent.parent  
+sys.path.insert(0, str(src_path))
+
+from utils.config import get_config
+from models.Mobile_JEPA import MobileJEPA_Encoder
+from data.Dataset import get_linear_probe_dataloaders
 
 def main():
-    params = get_config("./params.json")
+    params = get_config("../../training_results/params.json")
+
     img_size = params["model_params"]["img_size"][0]   
     features = params["model_params"]["features"]  
     batch_size = params["test_params"]["knn"]["batch_size"]

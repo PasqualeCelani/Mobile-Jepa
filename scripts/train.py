@@ -2,11 +2,21 @@ import torch
 import torch.nn.functional as F
 import os
 from tqdm import tqdm
-from Mobile_JEPA import MobileJEPA_Encoder, MobileJEPA_Predictor 
-from Dataset import get_dataloader
-from Schedulers import WarmupCosineSchedule, CosineWDSchedule
-from config import get_config
 import matplotlib.pyplot as plt
+
+import sys
+import os
+from pathlib import Path
+project_root = Path(__file__).resolve().parent.parent
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
+
+
+from models.Mobile_JEPA import MobileJEPA_Encoder, MobileJEPA_Predictor 
+from data.Dataset import get_dataloader
+from utils.Schedulers import WarmupCosineSchedule, CosineWDSchedule
+from utils.config import get_config
+
 
 def plot_loss_curve(epoch_list, loss_list, save_path="loss_ssl.png"):
     if not epoch_list:
@@ -53,7 +63,7 @@ def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, sch
 
 def main():
     ############################## params ################################
-    params = get_config("./params.json")
+    params = get_config("../training_results/params.json")
 
     img_size = params["model_params"]["img_size"][0]
     patch_size = params["model_params"]["patch_size"]    

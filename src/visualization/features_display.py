@@ -2,9 +2,16 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
-from Mobile_JEPA import MobileJEPA_Encoder
-from Dataset import get_linear_probe_dataloaders, DATASET_REGISTRY
-from config import get_config
+
+import sys
+import os
+from pathlib import Path
+src_path = Path(__file__).resolve().parent.parent  
+sys.path.insert(0, str(src_path))
+
+from models.Mobile_JEPA import MobileJEPA_Encoder
+from data.Dataset import get_linear_probe_dataloaders, DATASET_REGISTRY
+from utils.config import get_config
 
 def unnormalize(tensor, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
     for t, m, s in zip(tensor, mean, std):
@@ -81,7 +88,7 @@ def plot_all_layers(features_dict, mean, std):
         plt.close(fig)
 
 def main():
-    params = get_config("./params.json")
+    params = get_config("../../training_results/params.json")
 
     img_size = params["model_params"]["img_size"][0]
     features = params["model_params"]["features"]

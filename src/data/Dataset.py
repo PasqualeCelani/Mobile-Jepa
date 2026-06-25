@@ -1,9 +1,19 @@
 from torch.utils.data import Dataset, DataLoader
-from datasets import load_dataset
-import torchvision.transforms as transforms
-from BlockMasking import *
 from dataclasses import dataclass
 from typing import Tuple, Optional
+from datasets import load_dataset
+import torchvision.transforms as transforms
+
+import sys
+import os
+from pathlib import Path
+project_root = Path(__file__).resolve().parent.parent
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
+
+
+from utils.BlockMasking import *
+
 
 @dataclass
 class DatasetConfig:
