@@ -1,0 +1,58 @@
+{
+    "model_params" : {
+        "img_size" : [96, 96],
+        "patch_size" : 16,
+        "features" : 64,
+        "embed_dim" : 192,
+        "num_heads" : 3,
+        "predictor_embed_dim" : 96,
+        "dropout" :0.1
+    },
+
+    "mask_params" : {
+        "patch_size" : 16,
+        "enc_mask_scale" : [0.8, 1.0],
+        "pred_mask_scale" : [0.15, 0.20],
+        "aspect_ratio" :  [0.75, 1.5],
+        "num_enc_masks" : 1,
+        "num_pred_masks" : 2,
+        "min_keep" : 2,
+        "allow_overlap" : false
+    },
+
+    "training_params" : {
+        "batch_size" : 256,
+        "warmup" : 15,
+        "start_lr" : 1.0e-05,
+        "lr" :  0.0008,
+        "final_lr" :  1.0e-06,
+        "final_weight_decay" :  0.4,
+        "ipe_scale" :  1.0,
+        "epochs" :  100,
+        "weight_decay" : 0.04,
+        "ema" : [0.996, 1.0],
+        "dataset-name" : "cifar-10",
+        "optimizer" : "AdamW"
+    },
+
+    "test_params" : {
+        "knn" : {
+            "batch_size" : 128,
+            "dataset-name" : "cifar-10",
+            "k" : 25,
+            "accuracy-top1" : 52.96
+        },
+        "linear" : {
+            "batch_size" : 128,
+            "dataset-name" : "cifar-10",
+            "num_classes" : 10,
+            "epochs" : 90,
+            "lr" : 0.1,
+            "momentum" : 0.9,
+            "weight_decay" : 0,
+            "T_max" : 90,
+            "optimizer" : "SGD",
+            "accuracy-top1" : 57.02
+        }
+    }
+}
