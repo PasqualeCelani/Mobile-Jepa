@@ -2,55 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-class DoubleConv(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.GELU(),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.GELU()
-        )
-
-    def forward(self, x):
-        return self.double_conv(x)
-
-class Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.maxpool_conv = nn.Sequential(
-            nn.MaxPool2d(2),
-            DoubleConv(in_channels, out_channels)
-        )
-
-    def forward(self, x):
-        return self.maxpool_conv(x)
+import sys
+import os
+from pathlib import Path
+project_root = Path(__file__).resolve().parent.parent
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
 
 
-class CNN_Encoder(nn.Module):
-    def __init__(self, in_channels=3, features=64):
-        super().__init__()
-        self.inc = DoubleConv(in_channels, features)
-
-        self.down1 = Down(features, features * 2)
-        self.down2 = Down(features * 2, features * 4)
-        self.down3 = Down(features * 4, features * 8)
-        self.down4 = Down(features * 8, features * 8) 
-
-        self.norm = nn.GroupNorm(num_groups=1, num_channels=features * 8)
-
-    def forward(self, x):
-        x1 = self.inc(x)
-
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4) 
-
-        return self.norm(x5)
+from models.BackbonesCNN import *
 
 
 class MobileJEPA_Encoder(nn.Module):
@@ -62,13 +22,13 @@ class MobileJEPA_Encoder(nn.Module):
 
     def forward(self, x, masks=None):
         if self.is_target:
-            return self.cnn(x) # [B, 512, 14, 14]
+            return self.cnn(x) 
         
         assert masks is not None, "Context Encoder requires bounding box masks"
 
         crops = self._extract_crops(x, masks)
 
-        return self.cnn(crops) # [B * nenc, 512, H/16, W/16]
+        return self.cnn(crops) 
 
     def _extract_crops(self, imgs, masks):
         B, nenc, _ = masks.shape
@@ -92,31 +52,13 @@ class MobileJEPA_Encoder(nn.Module):
 
 
 
-class PredictorNet(nn.Module):
-    def __init__(self, in_channels=512, features=512):
-        super().__init__()
-
-        self.conv1 = DoubleConv(in_channels, features)
-        self.conv2 = DoubleConv(features, features)
-        self.conv3 = DoubleConv(features, features)
-
-        self.outc = nn.Conv2d(features, in_channels, kernel_size=1)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-
-        return self.outc(x)
-
-
-
 class MobileJEPA_Predictor(nn.Module):
-    def __init__(self, img_size=224, features=64):
+    def __init__(self, img_size=224, features=64, patch_size=16, embed_dim=512):
         super().__init__()
         self.img_size = img_size
-        self.bottleneck_size = img_size // 16  
-        self.embed_dim = features * 8 
+        self.patch_size = patch_size
+        self.bottleneck_size = img_size // self.patch_size  
+        self.embed_dim = embed_dim
         
         # Learnable token
         self.mask_token = nn.Parameter(torch.randn(1, self.embed_dim, 1, 1))
@@ -131,7 +73,7 @@ class MobileJEPA_Predictor(nn.Module):
         
         canvas = self.mask_token.expand(B, -1, self.bottleneck_size, self.bottleneck_size).clone()
         
-        masks_e = (masks_enc // 16).long()
+        masks_e = (masks_enc // self.patch_size).long()
         
         h_e, w_e = masks_e[0, 0, 2].item(), masks_e[0, 0, 3].item()
         y_e, x_e = masks_e[:, :, 0], masks_e[:, :, 1]
@@ -149,9 +91,9 @@ class MobileJEPA_Predictor(nn.Module):
         
         canvas[b_idx_e, c_idx, y_idx_e, x_idx_e] = context_feats
         
-        predicted_full_map = self.cnn(canvas) # [B, 512, 14, 14]
+        predicted_full_map = self.cnn(canvas)
         
-        masks_p = (masks_pred // 16).long()
+        masks_p = (masks_pred // self.patch_size).long()
         h_p, w_p = masks_p[0, 0, 2].item(), masks_p[0, 0, 3].item()
         y_p, x_p = masks_p[:, :, 0], masks_p[:, :, 1]
 

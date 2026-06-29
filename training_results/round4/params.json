@@ -1,0 +1,63 @@
+{
+    "model_params" : {
+        "img_size" : [96, 96],
+        "patch_size" : 16,
+        "features" : 64,
+
+        "cnn_depth": {
+            "convs_per_block": 2,
+            "total_conv_layers_per_network": 5,
+            "norm_layer": "BatchNorm2d",
+            "activation": "GELU"
+        }
+
+    },
+
+    "mask_params" : {
+        "patch_size" : 16,
+        "enc_mask_scale" : [0.25, 0.35],
+        "pred_mask_scale" : [0.15, 0.22],
+        "aspect_ratio" :  [0.75, 1.5],
+        "num_enc_masks" : 1,
+        "num_pred_masks" : 3,
+        "min_keep" : 6,
+        "allow_overlap" : false
+    },
+
+    "training_params" : {
+        "batch_size" : 128,
+        "warmup" : 10,
+        "start_lr" :  2.0e-06,
+        "lr" :  0.002,
+        "final_lr" :  2.0e-06,
+        "final_weight_decay" :  0.01,
+        "ipe_scale" :  1.0,
+        "epochs" :  100,
+        "weight_decay" : 0.01,
+        "ema" : [0.996, 1.0],
+        "dataset-name" : "cifar-10",
+        "optimizer" : "AdamW",
+        "training_time_hours" : 4
+    },
+
+    "test_params" : {
+        "knn" : {
+            "batch_size" : 128,
+            "dataset-name" : "cifar-10",
+            "k" : 25,
+            "accuracy-top1" : 56.6
+        },
+        "linear" : {
+            "batch_size" : 128,
+            "dataset-name" : "cifar-10",
+            "num_classes" : 10,
+            "epochs" : 90,
+            "lr" : 0.1,
+            "momentum" : 0.9,
+            "weight_decay" : 0,
+            "T_max" : 90,
+            "optimizer" : "SGD",
+            "accuracy-top1" : 65.2
+        }
+    }
+}

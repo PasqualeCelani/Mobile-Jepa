@@ -60,60 +60,6 @@ class MaskCollator(object):
         while w >= self.width: w -= 1
 
         return (h, w)
-    
-    def _sample_block_mask(self, b_size, acceptable_regions=None):
-        h, w = b_size 
-
-        tries = 0
-        timeout = og_timeout = 20
-        valid_mask = False
-
-        while not valid_mask:
-            if self.height - h <= 0 or self.width - w <= 0:
-                top, left = 0, 0
-            else:
-                top = torch.randint(0, self.height - h + 1, (1,)).item()
-                left = torch.randint(0, self.width - w + 1, (1,)).item()
-            
-            mask_2d = torch.zeros((self.height, self.width), dtype=torch.int32)
-            mask_2d[top:top+h, left:left+w] = 1
-
-            overlap = False
-            if acceptable_regions is not None:
-                for region in acceptable_regions:
-                    if torch.sum(mask_2d * region) > 0:
-                        overlap = True
-                        break
-            
-
-            if overlap:
-                timeout -= 1
-                if timeout == 0:
-                    tries += 1
-                    timeout = og_timeout
-                    if tries > 5: 
-                        break
-                continue
-            
-            if h * w >= self.min_keep:
-                valid_mask = True
-                break
-            else:
-                timeout -= 1
-                if timeout == 0:
-                    tries += 1
-                    timeout = og_timeout
-                    if tries > 5:
-                        break
-
-        top_px = top * self.patch_size
-        left_px = left * self.patch_size
-        h_px = h * self.patch_size
-        w_px = w * self.patch_size
-        
-        bbox = (top_px, left_px, h_px, w_px)
-        
-        return bbox, mask_2d
 
     def __call__(self, batch):
         B = len(batch)
@@ -132,28 +78,86 @@ class MaskCollator(object):
             generator=g,
             scale=self.enc_mask_scale,
             aspect_ratio_scale=(1., 1.))
-
-        collated_masks_pred, collated_masks_enc = [], []
-
-        for _ in range(B):
-            masks_e = []
-            context_2d_masks = []
-            for _ in range(self.nenc):
-                bbox_e, mask_2d_e = self._sample_block_mask(e_size)
-                masks_e.append(bbox_e)
-                context_2d_masks.append(mask_2d_e)
             
-            collated_masks_enc.append(masks_e)
+        e_h, e_w = e_size
+        p_h, p_w = p_size
+        
 
-            masks_p = []
-            for _ in range(self.npred):
-                unacceptable = context_2d_masks if not self.allow_overlap else None
-                bbox_p, _ = self._sample_block_mask(p_size, acceptable_regions=unacceptable)
-                masks_p.append(bbox_p)
+        max_e_top = max(0, self.height - e_h)
+        max_e_left = max(0, self.width - e_w)
+        
+        enc_tops = torch.randint(0, max_e_top + 1, (B, self.nenc), generator=g)
+        enc_lefts = torch.randint(0, max_e_left + 1, (B, self.nenc), generator=g)
+        
+
+        max_p_top = max(0, self.height - p_h)
+        max_p_left = max(0, self.width - p_w)
+        
+
+        if self.allow_overlap or (p_h * p_w < self.min_keep):
+            pred_tops = torch.randint(0, max_p_top + 1, (B, self.npred))
+            pred_lefts = torch.randint(0, max_p_left + 1, (B, self.npred))
+        else:
+            valid_preds = torch.zeros((B, self.npred), dtype=torch.bool)
+            cand_tops = torch.randint(0, max_p_top + 1, (B, self.npred))
+            cand_lefts = torch.randint(0, max_p_left + 1, (B, self.npred))
+            
+            attempts = 0
+            MAX_ATTEMPTS = 120 
+            
+            while not valid_preds.all() and attempts < MAX_ATTEMPTS:
+                invalid_mask = ~valid_preds
+                inv_b, inv_p = torch.where(invalid_mask)
                 
-            collated_masks_pred.append(masks_p)
+                if len(inv_b) == 0:
+                    break
+                    
 
-        masks_pred_tensor = torch.tensor(collated_masks_pred, dtype=torch.float32)
-        masks_enc_tensor = torch.tensor(collated_masks_enc, dtype=torch.float32)
+                enc_t = enc_tops[inv_b] 
+                enc_l = enc_lefts[inv_b] 
+                
+                c_t = cand_tops[inv_b, inv_p].unsqueeze(1) 
+                c_l = cand_lefts[inv_b, inv_p].unsqueeze(1) 
+                
+                no_overlap = (
+                    (c_t + p_h <= enc_t) |
+                    (enc_t + e_h <= c_t) |
+                    (c_l + p_w <= enc_l) |
+                    (enc_l + e_w <= c_l)
+                )
+                
+                is_valid = no_overlap.all(dim=1)
+                
+                valid_preds[inv_b, inv_p] = is_valid
+                
+                still_invalid = ~is_valid
+                if still_invalid.any():
+                    si_b = inv_b[still_invalid]
+                    si_p = inv_p[still_invalid]
+                    
+                    new_t = torch.randint(0, max_p_top + 1, (int(still_invalid.sum()),))
+                    new_l = torch.randint(0, max_p_left + 1, (int(still_invalid.sum()),))
+                    
+                    cand_tops[si_b, si_p] = new_t
+                    cand_lefts[si_b, si_p] = new_l
+                    
+                attempts += 1
+                
+            pred_tops = cand_tops
+            pred_lefts = cand_lefts
 
-        return collated_batch, masks_enc_tensor, masks_pred_tensor
+        enc_bboxes = torch.stack([
+            enc_tops * self.patch_size,
+            enc_lefts * self.patch_size,
+            torch.full_like(enc_tops, e_h * self.patch_size),
+            torch.full_like(enc_tops, e_w * self.patch_size)
+        ], dim=-1).float()
+        
+        pred_bboxes = torch.stack([
+            pred_tops * self.patch_size,
+            pred_lefts * self.patch_size,
+            torch.full_like(pred_tops, p_h * self.patch_size),
+            torch.full_like(pred_tops, p_w * self.patch_size)
+        ], dim=-1).float()
+
+        return collated_batch, enc_bboxes, pred_bboxes

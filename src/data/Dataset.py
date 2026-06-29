@@ -11,8 +11,12 @@ project_root = Path(__file__).resolve().parent.parent
 src_path = project_root / 'src'
 sys.path.insert(0, str(src_path))
 
+IS_VIT_BASED = True
 
-from utils.BlockMasking import *
+if IS_VIT_BASED:
+    from utils.IJepaBlockMasking import *
+else:
+    from utils.BlockMasking import *
 
 
 @dataclass
@@ -45,6 +49,10 @@ DATASET_REGISTRY = {
         train_resize_size=(96, 96), 
         probe_img_size=96,
         normalization=((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+    ),
+    "imagenet-100-il": DatasetConfig(
+        hf_repo="ilee0022/ImageNet100",
+        img_key="image",
     ),
 }
 

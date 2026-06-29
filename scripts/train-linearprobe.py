@@ -10,6 +10,7 @@ sys.path.insert(0, str(src_path))
 
 
 from models.Mobile_JEPA import MobileJEPA_Encoder, LinearProbeJEPA
+from models.ViT import *
 from data.Dataset import get_linear_probe_dataloaders
 from utils.config import get_config
 
@@ -26,15 +27,30 @@ def main():
     num_classes = params["test_params"]["linear"]["num_classes"]
     dataset_name = params["test_params"]["knn"]["dataset-name"]
 
+    IS_VIT_BASED = True
+
+    if IS_VIT_BASED:
+        embed_dim = params["model_params"]["embed_dim"]
+        num_heads =  params["model_params"]["num_heads"]
+        predictor_embed_dim = params["model_params"]["predictor_embed_dim"]
+        dropout = params["model_params"]["dropout"]
+        patch_size = params["model_params"]["patch_size"]
+
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    encoder = MobileJEPA_Encoder(img_size=img_size, features=features, is_target=True)
+    if not IS_VIT_BASED:
+        encoder = MobileJEPA_Encoder(img_size=img_size, features=features, is_target=True)
+        probe_embed_dim = features * 8
+    else:
+        encoder = ViT_TinyL(img_size, patch_size, embed_dim, num_heads, dropout)
+        probe_embed_dim = embed_dim
     
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
     print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
 
-    model = LinearProbeJEPA(encoder, embed_dim=features * 8, num_classes=num_classes).to(device)
+    model = LinearProbeJEPA(encoder, embed_dim=probe_embed_dim, num_classes=num_classes).to(device)
 
     train_loader, val_loader = get_linear_probe_dataloaders(batch_size=batch_size, img_size=img_size, dataset_name=dataset_name)
 

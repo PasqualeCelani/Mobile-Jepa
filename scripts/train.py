@@ -11,7 +11,7 @@ project_root = Path(__file__).resolve().parent.parent
 src_path = project_root / 'src'
 sys.path.insert(0, str(src_path))
 
-
+from models.ViT import * 
 from models.Mobile_JEPA import MobileJEPA_Encoder, MobileJEPA_Predictor 
 from data.Dataset import get_dataloader
 from utils.Schedulers import WarmupCosineSchedule, CosineWDSchedule
@@ -61,6 +61,21 @@ def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, sch
         return start_epoch
     return 0
 
+def apply_masks(x, masks):
+    all_x = []
+    for m in masks:
+        mask_keep = m.unsqueeze(-1).repeat(1, 1, x.size(-1))
+        all_x += [torch.gather(x, dim=1, index=mask_keep)]
+    return torch.cat(all_x, dim=0)
+    
+def repeat_interleave_batch(x, B, repeat):
+    N = len(x) // B
+    x = torch.cat([
+        torch.cat([x[i*B:(i+1)*B] for _ in range(repeat)], dim=0)
+        for i in range(N)
+    ], dim=0)
+    return x
+
 def main():
     ############################## params ################################
     params = get_config("../training_results/params.json")
@@ -68,6 +83,12 @@ def main():
     img_size = params["model_params"]["img_size"][0]
     patch_size = params["model_params"]["patch_size"]    
     features = params["model_params"]["features"]      
+
+    embed_dim = params["model_params"]["embed_dim"]
+    num_heads =  params["model_params"]["num_heads"]
+    predictor_embed_dim = params["model_params"]["predictor_embed_dim"]
+    dropout = params["model_params"]["dropout"]
+    IS_VIT_BASED = True
 
     # Masking params
     mask_params = params["mask_params"]
@@ -89,12 +110,20 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    encoder = MobileJEPA_Encoder(img_size, features=features, is_target=False)
-    target_encoder = MobileJEPA_Encoder(img_size, features=features, is_target=True)
-    
-    target_encoder.load_state_dict(encoder.state_dict())
-    
-    predictor = MobileJEPA_Predictor(img_size, features=features) 
+    if not IS_VIT_BASED:
+        encoder = MobileJEPA_Encoder(img_size, features=features, is_target=False)
+        target_encoder = MobileJEPA_Encoder(img_size, features=features, is_target=True)
+        
+        target_encoder.load_state_dict(encoder.state_dict())
+
+        predictor = MobileJEPA_Predictor(img_size, features=features, patch_size=patch_size, embed_dim=features*8)
+    else:
+        encoder = ViT_TinyL(img_size, patch_size, embed_dim, num_heads, dropout)
+        target_encoder = ViT_TinyL(img_size, patch_size, embed_dim, num_heads, dropout)
+
+        target_encoder.load_state_dict(encoder.state_dict())
+
+        predictor = ViT_Predictor(img_size, patch_size, embed_dim, num_heads, dropout, predictor_embed_dim) 
 
     encoder.to(device)
     predictor.to(device)
@@ -132,41 +161,62 @@ def main():
     epoch_numbers = []
     epoch_losses  = []
 
+    avg_std = 0.0
+    avg_norm = 0.0
+    alpha = 0.01 # Smoothing factor for the print display
+
     try:
         for epoch in range(start_epoch, epochs):
             progress_bar = tqdm(data_loader, desc=f"Epoch {epoch+1}", unit="batch")
             
             for i, (imgs, masks_enc, masks_pred) in enumerate(progress_bar):
-                imgs = imgs.to(device, non_blocking=True)
-                masks_enc = masks_enc.to(device, non_blocking=True)
-                masks_pred = masks_pred.to(device, non_blocking=True)
+                if not IS_VIT_BASED:
+                    imgs = imgs.to(device, non_blocking=True)
+                    masks_enc = masks_enc.to(device, non_blocking=True)
+                    masks_pred = masks_pred.to(device, non_blocking=True)
+                else:
+                    imgs = imgs.to(device, non_blocking=True)
+                    masks_enc = [m.to(device, non_blocking=True) for m in masks_enc]
+                    masks_pred = [m.to(device, non_blocking=True) for m in masks_pred]
 
                 scheduler.step()
                 wd_scheduler.step()
 
 
                 with torch.no_grad():
-                    target_feats = target_encoder(imgs) 
-                    # Shape: [B, 64, 224, 224]
+                    if not IS_VIT_BASED:
+                        target_feats = target_encoder(imgs)
+                    else:
+                        target_feats = target_encoder(imgs)
+                        target_feats = F.layer_norm(target_feats, (target_feats.size(-1),))  # normalize over feature-dim
+                        B = len(target_feats)
+                        target_feats = apply_masks(target_feats, masks_pred)
+                        target_feats = repeat_interleave_batch(target_feats, B, repeat=len(masks_enc)) 
 
+                    batch_std = target_feats.std(dim=0).mean().item()
+                    batch_norm = torch.norm(target_feats, dim=-1).mean().item()
+                    
+                    avg_std = (1 - alpha) * avg_std + alpha * batch_std
+                    avg_norm = (1 - alpha) * avg_norm + alpha * batch_norm
 
-                context_feats = encoder(imgs, masks_enc) 
-                # Shape: [B * nenc, 64, H_crop, W_crop]
+                if IS_VIT_BASED:
+                    context_feats = encoder(imgs, masks_enc)
+                    context_feats = predictor(context_feats, masks_enc, masks_pred)
+                else:
+                    context_feats = encoder(imgs, masks_enc) 
+                    pred_blocks, target_blocks = predictor(context_feats, target_feats, masks_enc, masks_pred)
 
-
-                # The predictor builds the canvas, runs the U-Net, and extracts the specific blocks
-                pred_blocks, target_blocks = predictor(context_feats, target_feats, masks_enc, masks_pred)
-                # Shapes: [B * npred, 64, H_pred, W_pred]
-
-
-                loss = F.smooth_l1_loss(pred_blocks, target_blocks)
+                if IS_VIT_BASED:
+                    sim = F.cosine_similarity(context_feats, target_feats, dim=1).mean().item()
+                    loss = F.smooth_l1_loss(context_feats, target_feats)
+                else:
+                    sim = F.cosine_similarity(pred_blocks, target_blocks, dim=1).mean().item()
+                    loss = F.smooth_l1_loss(pred_blocks, target_blocks)
                 
-
-                sim = F.cosine_similarity(pred_blocks, target_blocks, dim=1).mean().item()
                 
-                if i % 100 == 0:
-                    progress_bar.set_description(
-                        f"Epoch {epoch+1} | Loss: {loss.item():.4f} | Sim: {sim:.4f}"
+                if i % 10 == 0:
+                   progress_bar.set_description(
+                        f"Ep {epoch+1} | Loss: {loss.item():.3f} | Sim: {sim:.2f} | Var: {avg_std:.3f} | Norm: {avg_norm:.1f}"
                     )
 
                 optimizer.zero_grad()
