@@ -39,7 +39,8 @@
         "knn" : {
             "batch_size" : 128,
             "dataset-name" : "cifar-10",
-            "k" : 25
+            "k" : 25,
+            "accuracy-top1" : 60.30
         },
         "linear" : {
             "batch_size" : 128,
@@ -50,7 +51,8 @@
             "momentum" : 0.9,
             "weight_decay" : 0,
             "T_max" : 90,
-            "optimizer" : "SGD"
+            "optimizer" : "SGD",
+            "accuracy-top1" : 64.22
         }
     }
 }
