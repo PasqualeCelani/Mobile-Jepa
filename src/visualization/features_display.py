@@ -104,7 +104,7 @@ def main():
 
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
-    print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
+    print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch'] + 1}")
 
     _, val_loader = get_linear_probe_dataloaders(batch_size=256, img_size=img_size, dataset_name=dataset_name)
     images, _ = next(iter(val_loader))

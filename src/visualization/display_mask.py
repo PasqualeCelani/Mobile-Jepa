@@ -13,7 +13,7 @@ from data.Dataset import get_dataloader, DATASET_REGISTRY
 from utils.config import get_config
 
 def main():
-    params = get_config("../../training_results/params.json")
+    params = get_config("../../training_results/round9/params.json")
 
     img_size = params["model_params"]["img_size"][0]
     mask_params = params["mask_params"]

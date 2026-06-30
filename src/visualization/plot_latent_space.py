@@ -27,7 +27,7 @@ def main():
     encoder = MobileJEPA_Encoder(img_size=img_size, features=features, is_target=True)
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     encoder.load_state_dict(checkpoint['target_encoder_state_dict'])
-    print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch']}")
+    print(f"Loaded JEPA Target Encoder weights from epoch {checkpoint['epoch'] + 1}")
     
     encoder.to(device)
     encoder.eval()

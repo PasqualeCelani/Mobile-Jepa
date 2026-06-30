@@ -235,6 +235,10 @@ def main():
             epoch_losses.append(loss.item())
 
             save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, checkpoint_path)
+
+            if epoch % 10 == 0:
+                save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, f"checkpoint-{epoch}")
+
     except KeyboardInterrupt:
         plot_loss_curve(epoch_numbers, epoch_losses)
 
