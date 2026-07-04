@@ -11,7 +11,7 @@ project_root = Path(__file__).resolve().parent.parent
 src_path = project_root / 'src'
 sys.path.insert(0, str(src_path))
 
-IS_VIT_BASED = True
+IS_VIT_BASED = False
 
 if IS_VIT_BASED:
     from utils.IJepaBlockMasking import *
@@ -24,7 +24,7 @@ class DatasetConfig:
     hf_repo: str                     # HuggingFace dataset repository name
     img_key: str                     # Key for the image in the HF dataset dict
     train_split: str = "train"       # Name of the training split
-    val_split: str = "test"          # Name of the validation/test split
+    val_split: str = "validation"          # Name of the validation/test split
     
     # Transform parameters
     train_crop_size: int = 224       
@@ -154,7 +154,8 @@ def get_dataloader(batch_size=64, img_size=224, mask_params=None, dataset_name="
         collate_fn=mask_collator, 
         num_workers=6, 
         pin_memory=True, 
-        persistent_workers=True,  
+        persistent_workers=True, 
+        shuffle=True, 
         drop_last=True
     )
     

@@ -88,7 +88,7 @@ def plot_all_layers(features_dict, mean, std):
         plt.close(fig)
 
 def main():
-    params = get_config("../../training_results/params.json")
+    params = get_config("../../training_results/round10/params.json")
 
     img_size = params["model_params"]["img_size"][0]
     features = params["model_params"]["features"]

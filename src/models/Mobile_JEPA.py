@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 import sys
 import os
@@ -11,6 +12,7 @@ sys.path.insert(0, str(src_path))
 
 
 from models.BackbonesCNN import *
+from models.ViT import TransformerEncoder
 
 
 class MobileJEPA_Encoder(nn.Module):
@@ -135,3 +137,117 @@ class LinearProbeJEPA(nn.Module):
             features = F.normalize(features, p=2, dim=1)         
                 
         return self.head(features)
+
+class TransformerPredictor(nn.Module):
+    def __init__(
+        self, img_size=224, patch_size=16, embed_dim=512, 
+        predictor_embed_dim=256, num_heads=4, depth=3, dropout=0.1
+    ):
+        super().__init__()
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.bottleneck_size = img_size // self.patch_size  
+        self.embed_dim = embed_dim
+        self.predictor_embed_dim = predictor_embed_dim
+        
+
+        self.mask_token = nn.Parameter(torch.zeros(1, self.embed_dim, 1, 1))
+        nn.init.normal_(self.mask_token, std=0.02)
+        
+
+        self.in_proj = nn.Linear(embed_dim, predictor_embed_dim)
+        self.out_proj = nn.Linear(predictor_embed_dim, embed_dim)
+        
+        self.blocks = nn.ModuleList([
+            TransformerEncoder(predictor_embed_dim, num_heads, dropout=dropout)
+            for _ in range(depth)
+        ])
+
+        self.norm = nn.LayerNorm(predictor_embed_dim)
+        
+        num_patches = self.bottleneck_size ** 2
+
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, num_patches, predictor_embed_dim), requires_grad=False
+        )
+        
+
+        pos_embed_np = self.__get_2d_sincos_pos_embed(predictor_embed_dim, self.bottleneck_size)
+        self.pos_embed.data.copy_(torch.from_numpy(pos_embed_np).float().unsqueeze(0))
+
+    def forward(self, context_feats, target_feats, masks_enc, masks_pred):
+        B, C = target_feats.shape[0], target_feats.shape[1]
+        nenc, npred = masks_enc.shape[1], masks_pred.shape[1]
+        
+
+        canvas = self.mask_token.expand(B, -1, self.bottleneck_size, self.bottleneck_size).clone()
+        
+        masks_e = (masks_enc // self.patch_size).long()
+        h_e, w_e = masks_e[0, 0, 2].item(), masks_e[0, 0, 3].item()
+        y_e, x_e = masks_e[:, :, 0], masks_e[:, :, 1]
+
+        dy_e, dx_e = torch.meshgrid(torch.arange(h_e, device=canvas.device),
+                                    torch.arange(w_e, device=canvas.device), indexing='ij')
+
+        b_idx_e = torch.arange(B, device=canvas.device).view(B, 1, 1, 1, 1)
+        c_idx = torch.arange(C, device=canvas.device).view(1, 1, C, 1, 1)
+        y_idx_e = y_e.view(B, nenc, 1, 1, 1) + dy_e.view(1, 1, 1, h_e, w_e)
+        x_idx_e = x_e.view(B, nenc, 1, 1, 1) + dx_e.view(1, 1, 1, h_e, w_e)
+
+        context_feats = context_feats.view(B, nenc, C, h_e, w_e)
+        canvas[b_idx_e, c_idx, y_idx_e, x_idx_e] = context_feats
+        
+
+        tokens = canvas.flatten(2).transpose(1, 2)
+        
+        tokens = self.in_proj(tokens)
+        tokens = tokens + self.pos_embed
+        
+        for block in self.blocks:
+            tokens = block(tokens)
+
+        tokens = self.norm(tokens)
+        tokens = self.out_proj(tokens)
+        
+        predicted_full_map = tokens.transpose(1, 2).view(B, C, self.bottleneck_size, self.bottleneck_size)
+        
+        masks_p = (masks_pred // self.patch_size).long()
+        h_p, w_p = masks_p[0, 0, 2].item(), masks_p[0, 0, 3].item()
+        y_p, x_p = masks_p[:, :, 0], masks_p[:, :, 1]
+
+        dy_p, dx_p = torch.meshgrid(torch.arange(h_p, device=canvas.device),
+                                    torch.arange(w_p, device=canvas.device), indexing='ij')
+
+        b_idx_p = torch.arange(B, device=canvas.device).view(B, 1, 1, 1, 1)
+        y_idx_p = y_p.view(B, npred, 1, 1, 1) + dy_p.view(1, 1, 1, h_p, w_p)
+        x_idx_p = x_p.view(B, npred, 1, 1, 1) + dx_p.view(1, 1, 1, h_p, w_p)
+        
+        pred_blocks = predicted_full_map[b_idx_p, c_idx, y_idx_p, x_idx_p].view(B * npred, C, h_p, w_p)
+        target_blocks = target_feats[b_idx_p, c_idx, y_idx_p, x_idx_p].view(B * npred, C, h_p, w_p)
+        
+        return pred_blocks, target_blocks
+
+    def __get_2d_sincos_pos_embed(self, embed_dim, grid_size):
+        grid_h = np.arange(grid_size, dtype=float)
+        grid_w = np.arange(grid_size, dtype=float)
+        grid = np.meshgrid(grid_w, grid_h) 
+        grid = np.stack(grid, axis=0)
+        grid = grid.reshape([2, 1, grid_size, grid_size])
+        return self.__get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
+
+    def __get_2d_sincos_pos_embed_from_grid(self, embed_dim, grid):
+        assert embed_dim % 2 == 0
+        emb_h = self.__get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])
+        emb_w = self.__get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])
+        return np.concatenate([emb_h, emb_w], axis=1)
+
+    def __get_1d_sincos_pos_embed_from_grid(self, embed_dim, pos):
+        assert embed_dim % 2 == 0
+        omega = np.arange(embed_dim // 2, dtype=float)
+        omega /= embed_dim / 2.
+        omega = 1. / 10000**omega  
+        pos = pos.reshape(-1)  
+        out = np.einsum('m,d->md', pos, omega)  
+        emb_sin = np.sin(out)
+        emb_cos = np.cos(out)
+        return np.concatenate([emb_sin, emb_cos], axis=1)

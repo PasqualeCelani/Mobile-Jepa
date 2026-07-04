@@ -13,14 +13,14 @@ from data.Dataset import get_dataloader, DATASET_REGISTRY
 from utils.config import get_config
 
 def main():
-    params = get_config("../../training_results/round9/params.json")
+    params = get_config("../../training_results/params.json")
 
     img_size = params["model_params"]["img_size"][0]
     mask_params = params["mask_params"]
     dataset_name = params["training_params"]["dataset-name"]
     patch_size = params["model_params"]["patch_size"]
 
-    is_IJepa = True
+    is_IJepa = False
 
     dataset_cfg = DATASET_REGISTRY[dataset_name]
     mean, std = dataset_cfg.normalization

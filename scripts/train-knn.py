@@ -46,7 +46,7 @@ def knn_eval(encoder, train_loader, val_loader, device, is_vit_based, k=20):
 
 
 def main():
-    params = get_config("../training_results/params.json")
+    params = get_config("../training_results/round11/params.json")
 
     img_size = params["model_params"]["img_size"][0]   
     features = params["model_params"]["features"]  
@@ -54,7 +54,7 @@ def main():
     dataset_name = params["test_params"]["knn"]["dataset-name"]
     k = params["test_params"]["knn"]["k"]
 
-    IS_VIT_BASED = True
+    IS_VIT_BASED = False
 
     if IS_VIT_BASED:
         embed_dim = params["model_params"]["embed_dim"]

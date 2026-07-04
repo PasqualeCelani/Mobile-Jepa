@@ -15,7 +15,7 @@ from data.Dataset import get_linear_probe_dataloaders
 from utils.config import get_config
 
 def main():
-    params = get_config("../training_results/params.json")
+    params = get_config("../training_results/round11/params.json")
 
     img_size = params["model_params"]["img_size"][0]   
     features = params["model_params"]["features"] 
@@ -27,7 +27,7 @@ def main():
     num_classes = params["test_params"]["linear"]["num_classes"]
     dataset_name = params["test_params"]["knn"]["dataset-name"]
 
-    IS_VIT_BASED = True
+    IS_VIT_BASED = False
 
     if IS_VIT_BASED:
         embed_dim = params["model_params"]["embed_dim"]

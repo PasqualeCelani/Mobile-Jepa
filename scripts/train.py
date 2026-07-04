@@ -12,7 +12,7 @@ src_path = project_root / 'src'
 sys.path.insert(0, str(src_path))
 
 from models.ViT import * 
-from models.Mobile_JEPA import MobileJEPA_Encoder, MobileJEPA_Predictor 
+from models.Mobile_JEPA import MobileJEPA_Encoder, MobileJEPA_Predictor, TransformerPredictor 
 from data.Dataset import get_dataloader
 from utils.Schedulers import WarmupCosineSchedule, CosineWDSchedule
 from utils.config import get_config
@@ -43,6 +43,8 @@ def save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, schedu
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
         'wd_scheduler_state_dict': wd_scheduler.state_dict(), 
+        'rng_state': torch.get_rng_state(),
+        'cuda_rng_state': torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
     }
     torch.save(checkpoint, filename)
     print(f"Checkpoint saved at epoch {epoch}")
@@ -57,6 +59,9 @@ def load_checkpoint(filename, encoder, target_encoder, predictor, optimizer, sch
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         wd_scheduler.load_state_dict(checkpoint['wd_scheduler_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
+        torch.set_rng_state(checkpoint['rng_state'])
+        if checkpoint['cuda_rng_state'] is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state(checkpoint['cuda_rng_state'])
         print(f"Loaded checkpoint '{filename}' (resuming from epoch {start_epoch})")
         return start_epoch
     return 0
@@ -84,11 +89,13 @@ def main():
     patch_size = params["model_params"]["patch_size"]    
     features = params["model_params"]["features"]      
 
-    embed_dim = params["model_params"]["embed_dim"]
-    num_heads =  params["model_params"]["num_heads"]
-    predictor_embed_dim = params["model_params"]["predictor_embed_dim"]
-    dropout = params["model_params"]["dropout"]
-    IS_VIT_BASED = True
+    IS_VIT_BASED = False
+
+    if IS_VIT_BASED:
+        embed_dim = params["model_params"]["embed_dim"]
+        num_heads =  params["model_params"]["num_heads"]
+        predictor_embed_dim = params["model_params"]["predictor_embed_dim"]
+        dropout = params["model_params"]["dropout"]
 
     # Masking params
     mask_params = params["mask_params"]
@@ -116,7 +123,7 @@ def main():
         
         target_encoder.load_state_dict(encoder.state_dict())
 
-        predictor = MobileJEPA_Predictor(img_size, features=features, patch_size=patch_size, embed_dim=features*8)
+        predictor = TransformerPredictor(img_size, patch_size, 256, 128)
     else:
         encoder = ViT_TinyL(img_size, patch_size, embed_dim, num_heads, dropout)
         target_encoder = ViT_TinyL(img_size, patch_size, embed_dim, num_heads, dropout)
@@ -157,6 +164,10 @@ def main():
     total_steps = int(iterations_per_epoch * epochs * ipe_scale)
     checkpoint_path = "checkpoint.pth"
     start_epoch = load_checkpoint(checkpoint_path, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler)
+
+    if start_epoch > 0:
+        completed_steps = start_epoch * iterations_per_epoch
+        data_loader.collate_fn._itr_counter.value = completed_steps - 1
 
     epoch_numbers = []
     epoch_losses  = []
@@ -237,7 +248,7 @@ def main():
             save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, checkpoint_path)
 
             if epoch % 10 == 0:
-                save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, f"checkpoint-{epoch}")
+                save_checkpoint(epoch, encoder, target_encoder, predictor, optimizer, scheduler, wd_scheduler, f"checkpoint-{epoch}.pth")
 
     except KeyboardInterrupt:
         plot_loss_curve(epoch_numbers, epoch_losses)

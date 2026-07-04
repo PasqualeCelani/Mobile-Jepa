@@ -15,7 +15,9 @@ from models.Mobile_JEPA import MobileJEPA_Encoder
 from data.Dataset import get_linear_probe_dataloaders
 
 def main():
-    params = get_config("../../training_results/params.json")
+    params = get_config("../../training_results/round11/params.json")
+
+    target_classes = [3, 5] #0:bonnet, poke bonnet 1:green mamba, 2: langur, 5:Saluki, gazelle hound, 3:Doberman, Doberman pinscher
 
     img_size = params["model_params"]["img_size"][0]   
     features = params["model_params"]["features"]  
@@ -55,8 +57,15 @@ def main():
             
     all_feats = np.concatenate(all_feats, axis=0)
     all_labels = np.concatenate(all_labels, axis=0)
-    
-    # This prevents t-SNE from crashing on large datasets such as imagenet, the threshold depends on the avaible RAM
+
+    if target_classes is not None:
+        class_mask = np.isin(all_labels, target_classes)
+        all_feats = all_feats[class_mask]
+        all_labels = all_labels[class_mask]
+        
+        if len(all_labels) == 0:
+            raise ValueError(f"No samples found for the specified classes: {target_classes}")
+
     MAX_SAMPLES = 5000
     if len(all_feats) > MAX_SAMPLES:
         print(f"Subsampling from {len(all_feats)} to {MAX_SAMPLES} for faster t-SNE...")
@@ -64,30 +73,26 @@ def main():
         all_feats = all_feats[indices]
         all_labels = all_labels[indices]
         
-
-    print(f"Running 3D t-SNE on {len(all_feats)} samples...")
+    print(f"Running 2D t-SNE on {len(all_feats)} samples...")
     perplexity = min(30.0, len(all_feats) - 1)
-    tsne = TSNE(n_components=3, random_state=42, perplexity=perplexity, n_iter=1000)
-    feats_3d = tsne.fit_transform(all_feats)
+    tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity, n_iter=1000)
+    feats_2d = tsne.fit_transform(all_feats)
     
-
     fig = plt.figure(figsize=(12, 10))
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111)
     
     unique_labels = np.unique(all_labels)
     num_classes = len(unique_labels)
     
-
     if num_classes <= 20:
         cmap = plt.get_cmap('tab20')
     else:
         cmap = plt.get_cmap('turbo')
         
-
     norm = plt.Normalize(vmin=unique_labels.min(), vmax=unique_labels.max())
     
     scatter = ax.scatter(
-        feats_3d[:, 0], feats_3d[:, 1], feats_3d[:, 2],
+        feats_2d[:, 0], feats_2d[:, 1],
         c=all_labels, cmap=cmap, norm=norm,
         s=15,          
         alpha=0.7,     
@@ -108,18 +113,18 @@ def main():
         tick_step = max(1, num_classes // 10) 
         cbar.set_ticks(np.arange(unique_labels.min(), unique_labels.max() + 1, tick_step))
 
-    ax.set_title(f"3D Latent space t-SNE on {dataset_name}", fontsize=16, pad=20)
+    ax.set_title(f"2D Latent space t-SNE on {dataset_name}", fontsize=16, pad=20)
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_zticks([])
+    
     ax.grid(False)
     ax.set_facecolor('white')
     fig.patch.set_facecolor('white')
     plt.tight_layout()
-    save_path = "latent_space_3d_matplotlib.png"
+    
+    save_path = "latent_space_2d_matplotlib.png"
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.show()
-
 
 if __name__ == "__main__":
     main()

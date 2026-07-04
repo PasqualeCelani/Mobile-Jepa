@@ -31,7 +31,7 @@ def make_hook(layer_name):
 def main():
     global captured_layers_weights
     
-    params = get_config("../../training_results/round8/params.json")
+    params = get_config("../../training_results/round9/params.json")
 
 
     img_size = params["model_params"]["img_size"][0]    

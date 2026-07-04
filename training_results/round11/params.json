@@ -26,7 +26,7 @@
         "start_lr" : 2.0e-05,
         "lr" :  0.0005,
         "final_lr" :  1.0e-06,
-        "final_weight_decay" :  0.2,
+        "final_weight_decay" :  0.04,
         "ipe_scale" :  1.0,
         "epochs" :  100,
         "weight_decay" : 0.02,
@@ -39,7 +39,8 @@
         "knn" : {
             "batch_size" : 128,
             "dataset-name" : "imagenet-100",
-            "k" : 200
+            "k" : 200,
+            "top-1-accuracy" : 27.24
         },
         "linear" : {
             "batch_size" : 128,
@@ -50,7 +51,8 @@
             "momentum" : 0.9,
             "weight_decay" : 0,
             "T_max" : 90,
-            "optimizer" : "SGD"
+            "optimizer" : "SGD",
+            "top-1-accuracy" : 28.44
         }
     }
 }

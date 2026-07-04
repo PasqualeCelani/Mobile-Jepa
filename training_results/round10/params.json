@@ -39,7 +39,8 @@
         "knn" : {
             "batch_size" : 128,
             "dataset-name" : "imagenet-100",
-            "k" : 200
+            "k" : 25,
+            "top-1-accuracy" : 23.38
         },
         "linear" : {
             "batch_size" : 128,
@@ -50,7 +51,8 @@
             "momentum" : 0.9,
             "weight_decay" : 0,
             "T_max" : 90,
-            "optimizer" : "SGD"
+            "optimizer" : "SGD",
+            "top-1-accuracy" : 23.97
         }
     }
 }
