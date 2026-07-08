@@ -7,7 +7,7 @@
         "cnn_depth": {
             "convs_per_block": 2,
             "total_conv_layers_per_network": 5,
-            "norm_layer": "BatchNorm2d",
+            "norm_layer": "GroupNorm",
             "activation": "GELU"
         }
 
