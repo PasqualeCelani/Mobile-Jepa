@@ -52,6 +52,21 @@ Mobile-JEPA is a novel highly efficient CNN adaptation of I-JEPA. Has been built
     ├── round8
 ```
 
+# How to launch the scripts
+
+⚠️ **WARNING:** For training scripts or knn evaluations having a GPU CUDA compatible is higly recomended
+
+1. Create a virtual enviroptment: ```python -m venv venv ```
+2. Activate the enviroptment (UNIX):  ```source ./venv/bin/activate```
+3. Install dependencies: ```pip install -r requirements.txt```
+4. Impost `training_results/params.json` as you wish, or use one of the avaible in the rounds
+5. Impost `IS_VIT_BASE = True` in your running script if you want to run I-Jepa, ```False``` otherwise. Ensure the ```Dataset.py``` has setted right `IS_VIT_BASE` and the transformation up/down scalling if you wish to change it or is required to execute a round.
+6. Run the chosen script, for example for the main training script: ```python train.py```
+
+For the main training rounds I did you can find the weights in the following cloud directory: https://drive.google.com/drive/folders/1ICbjsMIbRSIqEIkJa7PvKiJBhgBq9XiW?usp=sharing
+
+
+
 # Block masking examples
 
 ## Mobile-Jepa
@@ -91,5 +106,9 @@ Mobile-JEPA is a novel highly efficient CNN adaptation of I-JEPA. Has been built
 ## Part 4
 <img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round9/attention_maps/vit_attention_mean_attention_map_part_4.png?raw=true" width="100%">
 
+# Mobile-Jepa: 2D t-SNE laten space with semantic related class and orthogonal class
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round11/2dlaten-t-sne.drawio.png?raw=true" width="100%">
 
+# Acknowledgements
+I want to give credit to the original I-Jepa repository: https://github.com/facebookresearch/ijepa. I took inspiration and adapted the code of the code suchs as: ```BlockMasking.py (I tooke inspiration of the setup, and i adapted to my crop strategy)``` ```IJepaBlockMasking.py (as the original)```, ```Schedulers.py (adapted for checkpoint logic)```,  and how to setup and impost the the training loop. 
 
