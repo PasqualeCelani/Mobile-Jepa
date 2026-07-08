@@ -1,1 +1,53 @@
 # Mobile-Jepa
+Mobile-JEPA is a novel highly efficient CNN adaptation of I-JEPA. Has been built to preserve I- JEPA’s partial computation efficiency without relying on sparse convolutions introducing a localized crop blocking mechanism integrated with a modernized VGG style backbone, effectively leveraging CNN inductive biases for low resource regimes.
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/mobile-jepa-architecture-cor.png?raw=true" width="100%">
+
+# Project structure
+```
+.
+├── LICENSE
+├── README.md
+├── masking_exaples # Folder containing plots of block masking both for Mobile-Jepa strategy and I-Jepa
+│   ├── I-Jepa-style
+│   └── Mobile-Jepa-style
+├── report.pdf 
+├── requirements.txt
+├── scripts
+│   ├── parameters-counter.py # Use to count the models trainable parameters
+│   ├── train-knn.py # Script to lunch for knn validation
+│   ├── train-linearprobe.py # Script to lunch for linear probe validation
+│   └── train.py # Main script to train Mobile-Jepa and I-Jepa (ViT/Tiny)
+├── src
+│   ├── __init__.py
+│   ├── data
+│   │   ├── Dataset.py  # Dataset and data loaders handling 
+│   │   └── __init__.py
+│   ├── models
+│   │   ├── BackbonesCNN.py # Backbones models for Mobile-Jepa (legacy experimental models are also presented)
+│   │   ├── Mobile_JEPA.py # Main Mobile-Jepa logic class with the flows and croping and backbones usage
+│   │   ├── ViT.py # ViT I-Jepa style
+│   │   └── __init__.py
+│   ├── utils
+│   │   ├── BlockMasking.py # Mobile-Jepa Crop based block sampling
+│   │   ├── IJepaBlockMasking.py # I-Jepa Crop based block sampling
+│   │   ├── Schedulers.py # WarmupCosineSchedule and CosineWDSchedule util class used in train.py
+│   │   ├── __init__.py
+│   │   └── config.py # Helper function used to load configs.json across the codebase
+│   └── visualization # Scripts to run for plotting attention maps, block masking, features and 2D latent t-sne
+│       ├── __init__.py
+│       ├── attention_maps.display.py
+│       ├── display_mask.py 
+│       ├── features_display.py
+│       └── plot_latent_space.py
+└── training_results # Main experimental results did trough the project NOTE: round1 were an erly architecture test in the first phaces i kept it for legacy, hence you can skip it.
+    ├── round1
+    ├── round10
+    ├── round11
+    ├── round2
+    ├── round3
+    ├── round4
+    ├── round5
+    ├── round6
+    ├── round7
+    ├── round8
+```
