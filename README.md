@@ -77,4 +77,19 @@ Mobile-JEPA is a novel highly efficient CNN adaptation of I-JEPA. Has been built
 ## Bootleneck
 <img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round11/features/Layer_5_Bottleneck.png?raw=true" width="100%">
 
+# I-Jepa on Vit/Tiny mean attention maps
+
+## Part 1
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round9/attention_maps/vit_attention_mean_attention_map_part_1.png?raw=true" width="100%">
+
+## Part 2
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round9/attention_maps/vit_attention_mean_attention_map_part_2.png?raw=true" width="100%">
+
+## Part 3
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round9/attention_maps/vit_attention_mean_attention_map_part_3.png?raw=true" width="100%">
+
+## Part 4
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round9/attention_maps/vit_attention_mean_attention_map_part_4.png?raw=true" width="100%">
+
+
 
