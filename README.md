@@ -51,3 +51,30 @@ Mobile-JEPA is a novel highly efficient CNN adaptation of I-JEPA. Has been built
     ├── round7
     ├── round8
 ```
+
+# Block masking examples
+
+## Mobile-Jepa
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/masking_exaples/Mobile-Jepa-style/masked_image_grid_round10-11.png?raw=true" width="100%">
+
+## I-Jepa
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/masking_exaples/I-Jepa-style/masked_image_grid-round9.png?raw=true" width="100%">
+
+# Mobile-Jepa feature maps on ImangeNet-100 showcase
+
+## Layer 1
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round11/features/Layer_1_inc.png?raw=true" width="100%">
+
+## Layer 2
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round11/features/Layer_2_down1.png?raw=true" width="100%">
+
+## Layer 3
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round11/features/Layer_3_down2.png?raw=true" width="100%">
+
+## Layer 4
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round11/features/Layer_4_down3.png?raw=true" width="100%">
+
+## Bootleneck
+<img src="https://github.com/PasqualeCelani/Mobile-Jepa/blob/main/training_results/round11/features/Layer_5_Bottleneck.png?raw=true" width="100%">
+
+
